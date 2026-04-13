@@ -966,6 +966,21 @@ textarea {
     line-height: 1.5;
 }
 
+.readonly-event-body {
+    display: grid;
+    gap: 12px;
+}
+
+.readonly-schedule-builder {
+    gap: 10px;
+}
+
+.student-pill.is-readonly {
+    cursor: default;
+    pointer-events: none;
+    background: rgba(255, 255, 255, 0.92);
+}
+
 .modal-heading {
     align-items: flex-start;
 }
@@ -1160,33 +1175,6 @@ textarea {
     .simple-event-notes {
         margin: 8px 0 12px;
         font-size: 0.94rem;
-    }
-
-    .interrogation-schedule-preview {
-        margin: 0 0 14px;
-        padding: 0;
-        list-style: none;
-        display: grid;
-        gap: 6px;
-    }
-
-    .interrogation-schedule-row {
-        display: grid;
-        gap: 2px;
-        padding: 8px 10px;
-        border-radius: 10px;
-        border: 1px solid rgba(31, 78, 95, 0.12);
-        background: rgba(255, 255, 255, 0.7);
-    }
-
-    .interrogation-schedule-day {
-        font-weight: 700;
-        color: var(--primary);
-    }
-
-    .interrogation-schedule-students {
-        color: var(--text);
-        font-size: 0.95rem;
     }
 
     input,

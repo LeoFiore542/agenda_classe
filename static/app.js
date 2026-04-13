@@ -43,6 +43,13 @@ const elements = {
     randomPickerDate: document.querySelector("#random-picker-date"),
     randomPickerName: document.querySelector("#random-picker-name"),
     randomPickerStatus: document.querySelector("#random-picker-status"),
+    readOnlyEventModal: document.querySelector("#readonly-event-modal"),
+    readOnlyEventBackdrop: document.querySelector("#readonly-event-backdrop"),
+    readOnlyEventCloseButton: document.querySelector("#readonly-event-close"),
+    readOnlyEventTitle: document.querySelector("#readonly-event-title"),
+    readOnlyEventSubtitle: document.querySelector("#readonly-event-subtitle"),
+    readOnlyEventNotes: document.querySelector("#readonly-event-notes"),
+    readOnlyEventSchedule: document.querySelector("#readonly-event-schedule"),
     subjectTextField: document.querySelector("#subject-text-field"),
     subjectInput: document.querySelector("#subject-input"),
     eventSubjectField: document.querySelector("#event-subject-field"),
@@ -94,6 +101,12 @@ function bindEvents() {
     elements.modalBackdrop.addEventListener("click", () => closeFormModal());
     elements.randomPickerCloseButton.addEventListener("click", () => closeRandomPickerModal());
     elements.randomPickerBackdrop.addEventListener("click", () => closeRandomPickerModal());
+    if (elements.readOnlyEventCloseButton) {
+        elements.readOnlyEventCloseButton.addEventListener("click", () => closeReadOnlyEventModal());
+    }
+    if (elements.readOnlyEventBackdrop) {
+        elements.readOnlyEventBackdrop.addEventListener("click", () => closeReadOnlyEventModal());
+    }
     elements.form.scheduled_for.addEventListener("change", (event) => {
         const previousMonth = state.displayedMonth;
         selectDate(event.target.value);
@@ -115,6 +128,8 @@ function bindEvents() {
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && !elements.randomPickerModal.hidden) {
             closeRandomPickerModal();
+        } else if (event.key === "Escape" && elements.readOnlyEventModal && !elements.readOnlyEventModal.hidden) {
+            closeReadOnlyEventModal();
         } else if (event.key === "Escape" && !elements.formModal.hidden) {
             closeFormModal();
         }
@@ -351,15 +366,17 @@ function renderCalendar() {
                 chip.classList.add("is-editing");
             }
             chip.textContent = eventItem.subject;
-            chip.title = `Premi per modificare: ${formatEventTypeLabel(eventItem.event_type).toLowerCase()}`;
+            chip.title = `Apri ${formatEventTypeLabel(eventItem.event_type).toLowerCase()}: ${eventItem.subject}`;
             if (state.canEditEvents) {
                 chip.addEventListener("click", (event) => {
                     event.stopPropagation();
                     startEditing(eventItem);
                 });
             } else {
-                chip.disabled = true;
-                chip.title = "Non hai i permessi per modificare questo impegno.";
+                chip.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    openReadOnlyEventModal(eventItem);
+                });
             }
             chips.appendChild(chip);
         });
@@ -407,10 +424,8 @@ function renderEventList() {
         const article = document.createElement("article");
         article.className = "simple-event-card";
         article.classList.add(getEventTypeClassName(event.event_type));
-        if (state.canEditEvents) {
-            article.tabIndex = 0;
-            article.setAttribute("role", "button");
-        }
+        article.tabIndex = 0;
+        article.setAttribute("role", "button");
         if (event.id === state.editingEventId) {
             article.classList.add("is-editing");
         }
@@ -420,6 +435,14 @@ function renderEventList() {
                 if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
                     keyboardEvent.preventDefault();
                     startEditing(event);
+                }
+            });
+        } else {
+            article.addEventListener("click", () => openReadOnlyEventModal(event));
+            article.addEventListener("keydown", (keyboardEvent) => {
+                if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+                    keyboardEvent.preventDefault();
+                    openReadOnlyEventModal(event);
                 }
             });
         }
@@ -442,31 +465,6 @@ function renderEventList() {
         notes.className = "simple-event-notes";
         notes.textContent = buildEventDescription(event);
         article.appendChild(notes);
-
-        const interrogationScheduleRows = buildInterrogationScheduleRows(event);
-        if (interrogationScheduleRows.length > 0) {
-            const scheduleList = document.createElement("ul");
-            scheduleList.className = "interrogation-schedule-preview";
-
-            interrogationScheduleRows.forEach((row) => {
-                const listItem = document.createElement("li");
-                listItem.className = "interrogation-schedule-row";
-
-                const day = document.createElement("span");
-                day.className = "interrogation-schedule-day";
-                day.textContent = formatDate(row.date);
-                listItem.appendChild(day);
-
-                const students = document.createElement("span");
-                students.className = "interrogation-schedule-students";
-                students.textContent = row.students.join(", ");
-                listItem.appendChild(students);
-
-                scheduleList.appendChild(listItem);
-            });
-
-            article.appendChild(scheduleList);
-        }
 
         const footer = document.createElement("div");
         footer.className = "simple-event-footer";
@@ -657,6 +655,80 @@ function closeFormModal(options = {}) {
     if (resetState && !keepFeedback) {
         resetForm({ feedback: "" });
     }
+}
+
+function openReadOnlyEventModal(event) {
+    if (!elements.readOnlyEventModal) {
+        return;
+    }
+
+    const scheduleRows = buildInterrogationScheduleRows(event);
+    elements.readOnlyEventTitle.textContent = `${formatEventTypeLabel(event.event_type)}: ${event.subject}`;
+    elements.readOnlyEventSubtitle.textContent = formatEventSchedule(event);
+    elements.readOnlyEventNotes.textContent = buildEventDescription(event);
+    renderReadOnlyScheduleRows(scheduleRows);
+
+    elements.readOnlyEventModal.hidden = false;
+    elements.readOnlyEventModal.classList.add("is-open");
+}
+
+function closeReadOnlyEventModal() {
+    if (!elements.readOnlyEventModal) {
+        return;
+    }
+
+    elements.readOnlyEventModal.classList.remove("is-open");
+    elements.readOnlyEventModal.hidden = true;
+    if (elements.readOnlyEventSchedule) {
+        elements.readOnlyEventSchedule.innerHTML = "";
+    }
+}
+
+function renderReadOnlyScheduleRows(rows) {
+    if (!elements.readOnlyEventSchedule) {
+        return;
+    }
+
+    elements.readOnlyEventSchedule.innerHTML = "";
+    if (rows.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "field-help";
+        empty.textContent = "Nessun interrogato assegnato.";
+        elements.readOnlyEventSchedule.appendChild(empty);
+        return;
+    }
+
+    const title = document.createElement("p");
+    title.className = "schedule-builder-title";
+    title.textContent = "Interrogati giorno per giorno";
+    elements.readOnlyEventSchedule.appendChild(title);
+
+    rows.forEach((row) => {
+        const rowSection = document.createElement("section");
+        rowSection.className = "schedule-row";
+
+        const rowHeader = document.createElement("div");
+        rowHeader.className = "schedule-row-header";
+
+        const dateLabel = document.createElement("span");
+        dateLabel.className = "schedule-row-title";
+        dateLabel.textContent = formatDate(row.date);
+        rowHeader.appendChild(dateLabel);
+
+        rowSection.appendChild(rowHeader);
+
+        const studentsGrid = document.createElement("div");
+        studentsGrid.className = "schedule-student-grid";
+        row.students.forEach((studentName) => {
+            const studentBadge = document.createElement("span");
+            studentBadge.className = "student-pill is-readonly";
+            studentBadge.textContent = studentName;
+            studentsGrid.appendChild(studentBadge);
+        });
+
+        rowSection.appendChild(studentsGrid);
+        elements.readOnlyEventSchedule.appendChild(rowSection);
+    });
 }
 
 function updateSelectedDateLabel() {

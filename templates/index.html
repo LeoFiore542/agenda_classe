@@ -227,6 +227,24 @@
                 </div>
             </section>
         </div>
+
+        <div id="readonly-event-modal" class="modal-shell" hidden>
+            <div id="readonly-event-backdrop" class="modal-backdrop"></div>
+            <section class="panel modal-panel" role="dialog" aria-modal="true" aria-labelledby="readonly-event-title">
+                <div class="panel-heading modal-heading">
+                    <div>
+                        <h2 id="readonly-event-title">Dettagli impegno</h2>
+                        <p id="readonly-event-subtitle"></p>
+                    </div>
+                    <button id="readonly-event-close" class="icon-button" type="button" aria-label="Chiudi dettagli">×</button>
+                </div>
+
+                <div class="readonly-event-body">
+                    <p id="readonly-event-notes" class="simple-event-notes"></p>
+                    <div id="readonly-event-schedule" class="schedule-builder readonly-schedule-builder"></div>
+                </div>
+            </section>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
