@@ -269,6 +269,50 @@ textarea {
     margin-bottom: 28px;
 }
 
+.countdown-panel {
+    margin-bottom: 24px;
+}
+
+.countdown-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.countdown-card {
+    border: 1px solid rgba(31, 78, 95, 0.14);
+    border-radius: 18px;
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.75);
+    display: grid;
+    gap: 4px;
+}
+
+.countdown-value {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: clamp(1.8rem, 3vw, 2.6rem);
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.countdown-label {
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.countdown-target {
+    margin: 0 0 12px;
+    color: var(--muted);
+}
+
+.countdown-settings-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: end;
+}
+
 .eyebrow {
     margin: 0 0 12px;
     font-size: 0.85rem;
@@ -962,6 +1006,10 @@ textarea {
     .month-actions {
         flex-wrap: wrap;
     }
+
+    .countdown-settings-form {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 760px) {
@@ -977,6 +1025,10 @@ textarea {
     .simple-layout,
     .side-column {
         gap: 16px;
+    }
+
+    .countdown-grid {
+        grid-template-columns: 1fr;
     }
 
     .panel,

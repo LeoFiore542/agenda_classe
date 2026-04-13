@@ -58,6 +58,11 @@ const elements = {
     notesInput: document.querySelector("#notes-input"),
     classRosterData: document.querySelector("#class-roster-data"),
     permissionsData: document.querySelector("#permissions-data"),
+    countdownWeekdays: document.querySelector("#countdown-weekdays"),
+    countdownHours: document.querySelector("#countdown-hours"),
+    countdownTargetLabel: document.querySelector("#countdown-target-label"),
+    countdownSettingsForm: document.querySelector("#countdown-settings-form"),
+    countdownTargetInput: document.querySelector("#countdown-target-input"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -72,6 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
     bindEvents();
     closeFormModal({ resetState: false });
     updateInterrogationFields();
+    loadCountdown();
     loadEvents();
 });
 
@@ -113,6 +119,71 @@ function bindEvents() {
             closeFormModal();
         }
     });
+
+    if (elements.countdownSettingsForm) {
+        elements.countdownSettingsForm.addEventListener("submit", handleUpdateCountdownTarget);
+    }
+}
+
+async function loadCountdown() {
+    if (!elements.countdownWeekdays || !elements.countdownHours || !elements.countdownTargetLabel) {
+        return;
+    }
+
+    const response = await fetch("/api/countdown");
+    if (!response.ok) {
+        elements.countdownTargetLabel.textContent = "Impossibile caricare il conto alla rovescia.";
+        return;
+    }
+
+    const payload = await response.json();
+    renderCountdown(payload);
+}
+
+function renderCountdown(payload) {
+    const weekdaysRemaining = Number(payload.weekdays_remaining || 0);
+    const schoolHoursRemaining = Number(payload.school_hours_remaining || 0);
+    const targetDate = payload.target_date || "";
+
+    elements.countdownWeekdays.textContent = String(weekdaysRemaining);
+    elements.countdownHours.textContent = String(schoolHoursRemaining);
+
+    if (targetDate) {
+        elements.countdownTargetLabel.textContent = `Data target: ${formatLongDate(targetDate)}`;
+        if (elements.countdownTargetInput) {
+            elements.countdownTargetInput.value = targetDate;
+        }
+    } else {
+        elements.countdownTargetLabel.textContent = "Data target non impostata.";
+        if (elements.countdownTargetInput) {
+            elements.countdownTargetInput.value = "";
+        }
+    }
+}
+
+async function handleUpdateCountdownTarget(event) {
+    event.preventDefault();
+    const targetDate = elements.countdownTargetInput?.value;
+    if (!targetDate) {
+        elements.countdownTargetLabel.textContent = "Inserisci una data valida.";
+        return;
+    }
+
+    const response = await fetch("/api/countdown", {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ target_date: targetDate }),
+    });
+
+    if (!response.ok) {
+        elements.countdownTargetLabel.textContent = "Impossibile aggiornare la data target.";
+        return;
+    }
+
+    const payload = await response.json();
+    renderCountdown(payload);
 }
 
 async function loadEvents() {
@@ -572,6 +643,15 @@ function formatDate(value) {
         weekday: "short",
         day: "2-digit",
         month: "short",
+    }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatLongDate(value) {
+    return new Intl.DateTimeFormat("it-IT", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
     }).format(new Date(`${value}T00:00:00`));
 }
 

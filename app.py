@@ -39,6 +39,8 @@ OWNER_USERNAME = "fiorini.leonardo"
 LEGACY_OWNER_USERNAME = "leonardo.fiorini"
 OWNER_FULL_NAME = "Leonardo Fiorini"
 CREDENTIAL_RESET_MIGRATION_KEY = "credential_reset_2026_04"
+COUNTDOWN_TARGET_DATE_KEY = "school_countdown_target_date"
+SCHOOL_HOURS_PER_DAY = 6
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "owner": {
@@ -49,6 +51,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "edit_events",
         "delete_events",
         "view_events",
+        "manage_countdown_target",
     },
     "rappresentante": {"create_events", "edit_events", "view_events"},
     "editor": {"edit_events", "view_events"},
@@ -403,6 +406,29 @@ def create_app(test_config: dict | None = None) -> Flask:
         if cursor.rowcount == 0:
             return jsonify({"error": "Evento non trovato."}), 404
         return ("", 204)
+
+    @app.get("/api/countdown")
+    @login_required
+    @password_change_not_required
+    def get_school_countdown():
+        return jsonify(build_school_countdown_payload())
+
+    @app.put("/api/countdown")
+    @login_required
+    @password_change_not_required
+    @permission_required("manage_countdown_target")
+    def update_school_countdown_target():
+        payload = request.get_json(silent=True) or {}
+        target_date = str(payload.get("target_date", "")).strip()
+
+        try:
+            normalized_target = date.fromisoformat(target_date).isoformat()
+        except ValueError:
+            return jsonify({"error": "Inserisci una data valida in formato YYYY-MM-DD."}), 400
+
+        set_app_setting(COUNTDOWN_TARGET_DATE_KEY, normalized_target)
+        get_db().commit()
+        return jsonify(build_school_countdown_payload())
 
     @app.get("/api/roles")
     @login_required
@@ -846,6 +872,71 @@ def fetch_users_with_roles() -> list[dict[str, object]]:
             }
         )
     return payload
+
+
+def get_app_setting(key: str) -> str | None:
+    row = get_db().execute(
+        "SELECT value FROM app_settings WHERE key = ?",
+        (key,),
+    ).fetchone()
+    if row is None:
+        return None
+    return str(row["value"])
+
+
+def set_app_setting(key: str, value: str) -> None:
+    get_db().execute(
+        """
+        INSERT INTO app_settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (key, value),
+    )
+
+
+def get_school_countdown_target_date() -> str | None:
+    raw_target = get_app_setting(COUNTDOWN_TARGET_DATE_KEY)
+    if not raw_target:
+        return None
+    try:
+        return date.fromisoformat(raw_target).isoformat()
+    except ValueError:
+        return None
+
+
+def count_weekdays_between(start_date: date, end_date: date) -> int:
+    if end_date < start_date:
+        return 0
+
+    total_days = 0
+    current_date = start_date
+    while current_date <= end_date:
+        if current_date.weekday() < 5:
+            total_days += 1
+        current_date = current_date.fromordinal(current_date.toordinal() + 1)
+    return total_days
+
+
+def build_school_countdown_payload() -> dict[str, object]:
+    today = date.today()
+    target_iso = get_school_countdown_target_date()
+    if target_iso is None:
+        return {
+            "today": today.isoformat(),
+            "target_date": None,
+            "weekdays_remaining": 0,
+            "school_hours_remaining": 0,
+        }
+
+    target_date = date.fromisoformat(target_iso)
+    weekdays_remaining = count_weekdays_between(today, target_date)
+    return {
+        "today": today.isoformat(),
+        "target_date": target_iso,
+        "weekdays_remaining": weekdays_remaining,
+        "school_hours_remaining": weekdays_remaining * SCHOOL_HOURS_PER_DAY,
+    }
 
 
 def migrate_events_table(database: DatabaseAdapter) -> None:

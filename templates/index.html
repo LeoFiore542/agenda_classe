@@ -62,6 +62,34 @@
             </div>
         </header>
 
+        <section class="panel countdown-panel">
+            <div class="panel-heading">
+                <h2>Conto alla rovescia scuola</h2>
+                <p>Giorni settimanali e ore di scuola rimanenti</p>
+            </div>
+            <div class="countdown-grid">
+                <article class="countdown-card">
+                    <span class="countdown-value" id="countdown-weekdays">0</span>
+                    <span class="countdown-label">giorni scolastici</span>
+                </article>
+                <article class="countdown-card">
+                    <span class="countdown-value" id="countdown-hours">0</span>
+                    <span class="countdown-label">ore di scuola</span>
+                </article>
+            </div>
+            <p class="countdown-target" id="countdown-target-label">Data target non impostata.</p>
+
+            {% if current_user and 'manage_countdown_target' in current_user.permissions %}
+            <form id="countdown-settings-form" class="countdown-settings-form">
+                <label>
+                    Data target
+                    <input id="countdown-target-input" type="date" required>
+                </label>
+                <button class="primary-button" type="submit">Aggiorna target</button>
+            </form>
+            {% endif %}
+        </section>
+
         <main class="layout simple-layout">
             <section class="panel calendar-panel">
                 <div class="panel-heading toolbar month-toolbar">
