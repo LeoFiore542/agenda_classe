@@ -117,7 +117,8 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     app.config["DB_BACKEND"] = detect_db_backend(app.config.get("DATABASE_URL"))
 
-    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
+    if app.config["DB_BACKEND"] == "sqlite":
+        Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 
     @app.before_request
     def load_current_user() -> None:
