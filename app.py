@@ -40,9 +40,17 @@ LEGACY_OWNER_USERNAME = "leonardo.fiorini"
 OWNER_FULL_NAME = "Leonardo Fiorini"
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
-    "owner": {"manage_roles", "manage_role_assignments", "create_roles", "manage_events", "view_events"},
-    "rappresentante": {"manage_events", "view_events"},
-    "editor": {"manage_events", "view_events"},
+    "owner": {
+        "manage_roles",
+        "manage_role_assignments",
+        "create_roles",
+        "create_events",
+        "edit_events",
+        "delete_events",
+        "view_events",
+    },
+    "rappresentante": {"create_events", "edit_events", "view_events"},
+    "editor": {"edit_events", "view_events"},
     "alunno": {"view_events"},
 }
 
@@ -270,6 +278,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/api/events")
     @login_required
     @password_change_not_required
+    @permission_required("view_events")
     def list_events():
         filters = {
             "month": request.args.get("month", "").strip(),
@@ -281,6 +290,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.post("/api/events")
     @login_required
     @password_change_not_required
+    @permission_required("create_events")
     def create_event():
         payload = request.get_json(silent=True) or {}
         payload["created_by"] = g.current_user["full_name"]
@@ -339,6 +349,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.patch("/api/events/<int:event_id>")
     @login_required
     @password_change_not_required
+    @permission_required("edit_events")
     def update_event(event_id: int):
         existing = fetch_event_by_id(event_id)
         if existing is None:
@@ -383,6 +394,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.delete("/api/events/<int:event_id>")
     @login_required
     @password_change_not_required
+    @permission_required("delete_events")
     def delete_event(event_id: int):
         database = get_db()
         cursor = database.execute("DELETE FROM events WHERE id = ?", (event_id,))
@@ -516,6 +528,7 @@ def init_db() -> None:
     seed_user_accounts(database)
     seed_roles_and_permissions(database)
     ensure_owner_account(database)
+    ensure_default_user_roles(database)
     database.commit()
 
 
@@ -666,6 +679,20 @@ def assign_role_to_user(database: DatabaseAdapter, user_id: int, role_name: str)
         "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
         (user_id, role_row["id"]),
     )
+
+
+def ensure_default_user_roles(database: DatabaseAdapter) -> None:
+    users_without_roles = database.execute(
+        """
+        SELECT u.id
+        FROM users u
+        LEFT JOIN user_roles ur ON ur.user_id = u.id
+        WHERE ur.user_id IS NULL
+        """
+    ).fetchall()
+
+    for row in users_without_roles:
+        assign_role_to_user(database, row["id"], "rappresentante")
 
 
 def ensure_users_columns(database: DatabaseAdapter) -> None:
