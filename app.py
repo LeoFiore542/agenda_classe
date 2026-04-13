@@ -118,7 +118,12 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.config["DB_BACKEND"] = detect_db_backend(app.config.get("DATABASE_URL"))
 
     if app.config["DB_BACKEND"] == "sqlite":
-        Path(app.instance_path).mkdir(parents=True, exist_ok=True)
+        try:
+            Path(app.instance_path).mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # On serverless platforms (e.g. Vercel) /var/task is read-only.
+            # Fallback to /tmp so the app can still boot if DATABASE_URL is missing.
+            app.config["DATABASE"] = "/tmp/school_planner.db"
 
     @app.before_request
     def load_current_user() -> None:
