@@ -25,7 +25,30 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role_id INTEGER NOT NULL,
+    permission TEXT NOT NULL,
+    UNIQUE(role_id, permission),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id INTEGER NOT NULL,
+    role_id INTEGER NOT NULL,
+    UNIQUE(user_id, role_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_scheduled_for ON events (scheduled_for);
 CREATE INDEX IF NOT EXISTS idx_events_subject ON events (subject);
 CREATE INDEX IF NOT EXISTS idx_events_status ON events (status);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
+CREATE INDEX IF NOT EXISTS idx_roles_name ON roles (name);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role_id ON role_permissions (role_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles (user_id);

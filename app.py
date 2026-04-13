@@ -35,6 +35,15 @@ DEFAULT_CLASS_GROUP = "4G"
 DEFAULT_EVENT_TYPE = "verifica"
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8000
+OWNER_USERNAME = "leonardo.fiorini"
+OWNER_FULL_NAME = "Leonardo Fiorini"
+
+ROLE_PERMISSIONS: dict[str, set[str]] = {
+    "owner": {"manage_roles", "manage_role_assignments", "create_roles", "manage_events", "view_events"},
+    "rappresentante": {"manage_events", "view_events"},
+    "editor": {"manage_events", "view_events"},
+    "alunno": {"view_events"},
+}
 
 
 class DatabaseAdapter:
@@ -100,6 +109,24 @@ def password_change_not_required(view_func):
         return view_func(*args, **kwargs)
 
     return wrapped_view
+
+
+def permission_required(permission_name: str):
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapped_view(*args, **kwargs):
+            current_user = g.get("current_user")
+            permissions = set(current_user.get("permissions", [])) if current_user else set()
+            if permission_name not in permissions:
+                if request.path.startswith("/api/"):
+                    return jsonify({"error": "Permessi insufficienti."}), 403
+                flash("Non hai i permessi necessari per questa operazione.", "error")
+                return redirect(url_for("index"))
+            return view_func(*args, **kwargs)
+
+        return wrapped_view
+
+    return decorator
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -363,6 +390,96 @@ def create_app(test_config: dict | None = None) -> Flask:
             return jsonify({"error": "Evento non trovato."}), 404
         return ("", 204)
 
+    @app.get("/api/roles")
+    @login_required
+    @password_change_not_required
+    @permission_required("manage_roles")
+    def list_roles():
+        return jsonify(fetch_all_roles_with_permissions())
+
+    @app.post("/api/roles")
+    @login_required
+    @password_change_not_required
+    @permission_required("create_roles")
+    def create_role():
+        payload = request.get_json(silent=True) or {}
+        role_name = normalize_role_name(str(payload.get("name", "")))
+        permissions = payload.get("permissions", [])
+
+        if not role_name:
+            return jsonify({"error": "Il nome ruolo e obbligatorio."}), 400
+        if not isinstance(permissions, list) or any(not str(item).strip() for item in permissions):
+            return jsonify({"error": "La lista permessi non e valida."}), 400
+
+        permissions_set = {str(item).strip().lower() for item in permissions if str(item).strip()}
+        database = get_db()
+        existing = database.execute("SELECT id FROM roles WHERE name = ?", (role_name,)).fetchone()
+        if existing is not None:
+            return jsonify({"error": "Ruolo gia esistente."}), 409
+
+        database.execute("INSERT INTO roles (name) VALUES (?)", (role_name,))
+        role_row = database.execute("SELECT id FROM roles WHERE name = ?", (role_name,)).fetchone()
+        if role_row is None:
+            return jsonify({"error": "Impossibile creare il ruolo."}), 500
+
+        for permission_name in sorted(permissions_set):
+            database.execute(
+                "INSERT INTO role_permissions (role_id, permission) VALUES (?, ?)",
+                (role_row["id"], permission_name),
+            )
+
+        database.commit()
+        created_role = next((role for role in fetch_all_roles_with_permissions() if role["name"] == role_name), None)
+        return jsonify(created_role), 201
+
+    @app.get("/api/users/roles")
+    @login_required
+    @password_change_not_required
+    @permission_required("manage_role_assignments")
+    def list_users_with_roles():
+        return jsonify(fetch_users_with_roles())
+
+    @app.put("/api/users/<int:user_id>/roles")
+    @login_required
+    @password_change_not_required
+    @permission_required("manage_role_assignments")
+    def update_user_roles(user_id: int):
+        payload = request.get_json(silent=True) or {}
+        role_names = payload.get("roles", [])
+        if not isinstance(role_names, list):
+            return jsonify({"error": "Il campo roles deve essere una lista."}), 400
+
+        normalized_roles = sorted({normalize_role_name(str(role_name)) for role_name in role_names if str(role_name).strip()})
+        database = get_db()
+        user_row = database.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
+        if user_row is None:
+            return jsonify({"error": "Utente non trovato."}), 404
+
+        known_roles = {row["name"] for row in database.execute("SELECT name FROM roles").fetchall()}
+        unknown_roles = [role_name for role_name in normalized_roles if role_name not in known_roles]
+        if unknown_roles:
+            return jsonify({"error": f"Ruoli non validi: {', '.join(unknown_roles)}."}), 400
+
+        if user_row["username"] == OWNER_USERNAME and "owner" not in normalized_roles:
+            return jsonify({"error": "L'account owner deve mantenere il ruolo owner."}), 400
+
+        database.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
+        for role_name in normalized_roles:
+            assign_role_to_user(database, user_id, role_name)
+        database.commit()
+
+        refreshed_user = fetch_user_by_id(user_id)
+        if refreshed_user is None:
+            return jsonify({"error": "Impossibile leggere l'utente aggiornato."}), 500
+        return jsonify(
+            {
+                "id": refreshed_user["id"],
+                "username": refreshed_user["username"],
+                "full_name": refreshed_user["full_name"],
+                "roles": refreshed_user.get("roles", []),
+            }
+        )
+
     return app
 
 
@@ -396,6 +513,8 @@ def init_db() -> None:
     ensure_events_columns(database)
     ensure_users_columns(database)
     seed_user_accounts(database)
+    seed_roles_and_permissions(database)
+    ensure_owner_account(database)
     database.commit()
 
 
@@ -459,6 +578,79 @@ def seed_user_accounts(database: DatabaseAdapter) -> None:
         taken_usernames.add(username)
 
 
+def seed_roles_and_permissions(database: DatabaseAdapter) -> None:
+    role_rows = database.execute("SELECT id, name FROM roles").fetchall()
+    role_by_name = {row["name"]: row["id"] for row in role_rows}
+
+    for role_name in ROLE_PERMISSIONS:
+        if role_name in role_by_name:
+            continue
+        database.execute("INSERT INTO roles (name) VALUES (?)", (role_name,))
+
+    role_rows = database.execute("SELECT id, name FROM roles").fetchall()
+    role_by_name = {row["name"]: row["id"] for row in role_rows}
+
+    for role_name, permissions in ROLE_PERMISSIONS.items():
+        role_id = role_by_name[role_name]
+        existing_permissions = {
+            row["permission"]
+            for row in database.execute(
+                "SELECT permission FROM role_permissions WHERE role_id = ?",
+                (role_id,),
+            ).fetchall()
+        }
+        for permission_name in permissions:
+            if permission_name in existing_permissions:
+                continue
+            database.execute(
+                "INSERT INTO role_permissions (role_id, permission) VALUES (?, ?)",
+                (role_id, permission_name),
+            )
+
+
+def ensure_owner_account(database: DatabaseAdapter) -> None:
+    owner_row = database.execute(
+        "SELECT id FROM users WHERE username = ?",
+        (OWNER_USERNAME,),
+    ).fetchone()
+
+    if owner_row is None:
+        database.execute(
+            "INSERT INTO users (full_name, username, password_hash, must_change_password) VALUES (?, ?, ?, ?)",
+            (
+                OWNER_FULL_NAME,
+                OWNER_USERNAME,
+                generate_password_hash(OWNER_USERNAME, method="pbkdf2:sha256"),
+                1,
+            ),
+        )
+        owner_row = database.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (OWNER_USERNAME,),
+        ).fetchone()
+
+    if owner_row is not None:
+        assign_role_to_user(database, owner_row["id"], "owner")
+
+
+def assign_role_to_user(database: DatabaseAdapter, user_id: int, role_name: str) -> None:
+    role_row = database.execute("SELECT id FROM roles WHERE name = ?", (role_name,)).fetchone()
+    if role_row is None:
+        return
+
+    existing = database.execute(
+        "SELECT 1 FROM user_roles WHERE user_id = ? AND role_id = ?",
+        (user_id, role_row["id"]),
+    ).fetchone()
+    if existing is not None:
+        return
+
+    database.execute(
+        "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
+        (user_id, role_row["id"]),
+    )
+
+
 def ensure_users_columns(database: DatabaseAdapter) -> None:
     if database.backend != "sqlite":
         return
@@ -485,7 +677,13 @@ def fetch_user_by_id(user_id: int | None) -> dict | None:
         "SELECT id, full_name, username, password_hash, must_change_password, created_at FROM users WHERE id = ?",
         (user_id,),
     ).fetchone()
-    return dict(row) if row is not None else None
+    if row is None:
+        return None
+
+    user = dict(row)
+    user["roles"] = fetch_role_names_for_user(user["id"])
+    user["permissions"] = fetch_permissions_for_user(user["id"])
+    return user
 
 
 def fetch_user_by_username(username: str) -> dict | None:
@@ -493,7 +691,80 @@ def fetch_user_by_username(username: str) -> dict | None:
         "SELECT id, full_name, username, password_hash, must_change_password, created_at FROM users WHERE username = ?",
         (username,),
     ).fetchone()
-    return dict(row) if row is not None else None
+    if row is None:
+        return None
+
+    user = dict(row)
+    user["roles"] = fetch_role_names_for_user(user["id"])
+    user["permissions"] = fetch_permissions_for_user(user["id"])
+    return user
+
+
+def normalize_role_name(value: str) -> str:
+    return value.strip().lower()
+
+
+def fetch_role_names_for_user(user_id: int) -> list[str]:
+    rows = get_db().execute(
+        """
+        SELECT r.name
+        FROM roles r
+        JOIN user_roles ur ON ur.role_id = r.id
+        WHERE ur.user_id = ?
+        ORDER BY r.name ASC
+        """,
+        (user_id,),
+    ).fetchall()
+    return [row["name"] for row in rows]
+
+
+def fetch_permissions_for_user(user_id: int) -> list[str]:
+    rows = get_db().execute(
+        """
+        SELECT DISTINCT rp.permission
+        FROM role_permissions rp
+        JOIN user_roles ur ON ur.role_id = rp.role_id
+        WHERE ur.user_id = ?
+        ORDER BY rp.permission ASC
+        """,
+        (user_id,),
+    ).fetchall()
+    return [row["permission"] for row in rows]
+
+
+def fetch_all_roles_with_permissions() -> list[dict[str, object]]:
+    role_rows = get_db().execute("SELECT id, name FROM roles ORDER BY name ASC").fetchall()
+    roles_payload: list[dict[str, object]] = []
+    for role_row in role_rows:
+        permission_rows = get_db().execute(
+            "SELECT permission FROM role_permissions WHERE role_id = ? ORDER BY permission ASC",
+            (role_row["id"],),
+        ).fetchall()
+        roles_payload.append(
+            {
+                "id": role_row["id"],
+                "name": role_row["name"],
+                "permissions": [row["permission"] for row in permission_rows],
+            }
+        )
+    return roles_payload
+
+
+def fetch_users_with_roles() -> list[dict[str, object]]:
+    user_rows = get_db().execute(
+        "SELECT id, username, full_name FROM users ORDER BY username ASC"
+    ).fetchall()
+    payload: list[dict[str, object]] = []
+    for user_row in user_rows:
+        payload.append(
+            {
+                "id": user_row["id"],
+                "username": user_row["username"],
+                "full_name": user_row["full_name"],
+                "roles": fetch_role_names_for_user(user_row["id"]),
+            }
+        )
+    return payload
 
 
 def migrate_events_table(database: DatabaseAdapter) -> None:
