@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from app import build_username_from_full_name, create_app, format_long_date
+from app import build_username_from_full_name, create_app, format_long_date, init_db
 
 
 class AppTestCase(unittest.TestCase):
@@ -276,6 +276,36 @@ class AppTestCase(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 400)
+
+    def test_owner_account_reset_and_legacy_owner_removed(self):
+        with self.app.app_context():
+            init_db()
+            database = self.app.view_functions["login"].__globals__["get_db"]()
+            legacy_owner = database.execute(
+                "SELECT id FROM users WHERE username = ?",
+                ("leonardo.fiorini",),
+            ).fetchone()
+            owner = database.execute(
+                "SELECT id, username, must_change_password FROM users WHERE username = ?",
+                ("fiorini.leonardo",),
+            ).fetchone()
+
+        self.assertIsNone(legacy_owner)
+        self.assertIsNotNone(owner)
+        self.assertEqual(owner["username"], "fiorini.leonardo")
+        self.assertEqual(owner["must_change_password"], 1)
+
+        owner_login = self.client.post(
+            "/login",
+            data={
+                "username": "fiorini.leonardo",
+                "password": "fiorini.leonardo",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(owner_login.status_code, 302)
+        self.assertEqual(owner_login.headers["Location"], "/account")
 
 
 if __name__ == "__main__":

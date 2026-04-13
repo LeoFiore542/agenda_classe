@@ -38,6 +38,7 @@ DEFAULT_PORT = 8000
 OWNER_USERNAME = "fiorini.leonardo"
 LEGACY_OWNER_USERNAME = "leonardo.fiorini"
 OWNER_FULL_NAME = "Leonardo Fiorini"
+CREDENTIAL_RESET_MIGRATION_KEY = "credential_reset_2026_04"
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "owner": {
@@ -529,6 +530,7 @@ def init_db() -> None:
     seed_roles_and_permissions(database)
     ensure_owner_account(database)
     ensure_default_user_roles(database)
+    run_credential_reset_once(database)
     database.commit()
 
 
@@ -638,6 +640,9 @@ def ensure_owner_account(database: DatabaseAdapter) -> None:
                 "UPDATE users SET username = ?, full_name = ? WHERE id = ?",
                 (OWNER_USERNAME, OWNER_FULL_NAME, legacy_row["id"]),
             )
+        elif legacy_row is not None and target_row is not None:
+            database.execute("DELETE FROM user_roles WHERE user_id = ?", (legacy_row["id"],))
+            database.execute("DELETE FROM users WHERE id = ?", (legacy_row["id"],))
 
     owner_row = database.execute(
         "SELECT id FROM users WHERE username = ?",
@@ -693,6 +698,38 @@ def ensure_default_user_roles(database: DatabaseAdapter) -> None:
 
     for row in users_without_roles:
         assign_role_to_user(database, row["id"], "rappresentante")
+
+
+def run_credential_reset_once(database: DatabaseAdapter) -> None:
+    existing_marker = database.execute(
+        "SELECT value FROM app_settings WHERE key = ?",
+        (CREDENTIAL_RESET_MIGRATION_KEY,),
+    ).fetchone()
+    if existing_marker is not None:
+        return
+
+    legacy_row = database.execute(
+        "SELECT id FROM users WHERE username = ?",
+        (LEGACY_OWNER_USERNAME,),
+    ).fetchone()
+    if legacy_row is not None:
+        database.execute("DELETE FROM user_roles WHERE user_id = ?", (legacy_row["id"],))
+        database.execute("DELETE FROM users WHERE id = ?", (legacy_row["id"],))
+
+    user_rows = database.execute("SELECT id, username FROM users").fetchall()
+    for user_row in user_rows:
+        database.execute(
+            "UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?",
+            (
+                generate_password_hash(user_row["username"], method="pbkdf2:sha256"),
+                user_row["id"],
+            ),
+        )
+
+    database.execute(
+        "INSERT INTO app_settings (key, value) VALUES (?, ?)",
+        (CREDENTIAL_RESET_MIGRATION_KEY, "done"),
+    )
 
 
 def ensure_users_columns(database: DatabaseAdapter) -> None:

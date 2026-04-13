@@ -42,6 +42,11 @@ CREATE TABLE IF NOT EXISTS user_roles (
     UNIQUE(user_id, role_id)
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_scheduled_for ON events (scheduled_for);
 CREATE INDEX IF NOT EXISTS idx_events_subject ON events (subject);
 CREATE INDEX IF NOT EXISTS idx_events_status ON events (status);
