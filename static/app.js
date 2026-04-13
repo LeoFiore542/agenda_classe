@@ -367,17 +367,10 @@ function renderCalendar() {
             }
             chip.textContent = eventItem.subject;
             chip.title = `Apri ${formatEventTypeLabel(eventItem.event_type).toLowerCase()}: ${eventItem.subject}`;
-            if (state.canEditEvents) {
-                chip.addEventListener("click", (event) => {
-                    event.stopPropagation();
-                    startEditing(eventItem);
-                });
-            } else {
-                chip.addEventListener("click", (event) => {
-                    event.stopPropagation();
-                    openReadOnlyEventModal(eventItem, dateValue);
-                });
-            }
+            chip.addEventListener("click", (event) => {
+                event.stopPropagation();
+                openReadOnlyEventModal(eventItem, dateValue);
+            });
             chips.appendChild(chip);
         });
 
