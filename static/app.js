@@ -5,6 +5,8 @@ const state = {
     editingEventId: null,
     interrogationScheduleDraft: {},
     classRoster: [],
+    permissions: [],
+    canEditEvents: false,
     randomPicker: {
         intervalId: null,
         timeoutId: null,
@@ -54,10 +56,13 @@ const elements = {
     notesLabel: document.querySelector("#notes-label"),
     notesInput: document.querySelector("#notes-input"),
     classRosterData: document.querySelector("#class-roster-data"),
+    permissionsData: document.querySelector("#permissions-data"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
     state.classRoster = parseClassRoster();
+    state.permissions = parsePermissions();
+    state.canEditEvents = state.permissions.includes("edit_events");
     elements.form.event_type.value = "verifica";
     elements.form.interrogation_mode.value = "period";
     elements.form.scheduled_for.value = state.selectedDate;
@@ -274,10 +279,15 @@ function renderCalendar() {
             }
             chip.textContent = eventItem.subject;
             chip.title = `Premi per modificare: ${formatEventTypeLabel(eventItem.event_type).toLowerCase()}`;
-            chip.addEventListener("click", (event) => {
-                event.stopPropagation();
-                startEditing(eventItem);
-            });
+            if (state.canEditEvents) {
+                chip.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    startEditing(eventItem);
+                });
+            } else {
+                chip.disabled = true;
+                chip.title = "Non hai i permessi per modificare questo impegno.";
+            }
             chips.appendChild(chip);
         });
 
@@ -324,18 +334,22 @@ function renderEventList() {
         const article = document.createElement("article");
         article.className = "simple-event-card";
         article.classList.add(getEventTypeClassName(event.event_type));
-        article.tabIndex = 0;
-        article.setAttribute("role", "button");
+        if (state.canEditEvents) {
+            article.tabIndex = 0;
+            article.setAttribute("role", "button");
+        }
         if (event.id === state.editingEventId) {
             article.classList.add("is-editing");
         }
-        article.addEventListener("click", () => startEditing(event));
-        article.addEventListener("keydown", (keyboardEvent) => {
-            if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
-                keyboardEvent.preventDefault();
-                startEditing(event);
-            }
-        });
+        if (state.canEditEvents) {
+            article.addEventListener("click", () => startEditing(event));
+            article.addEventListener("keydown", (keyboardEvent) => {
+                if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+                    keyboardEvent.preventDefault();
+                    startEditing(event);
+                }
+            });
+        }
 
         const heading = document.createElement("div");
         heading.className = "simple-event-heading";
@@ -455,6 +469,10 @@ function selectDate(value) {
 }
 
 function startEditing(event) {
+    if (!state.canEditEvents) {
+        return;
+    }
+
     state.editingEventId = event.id;
     elements.form.event_type.value = event.event_type;
     elements.form.interrogation_mode.value = event.interrogation_mode || "period";
@@ -475,6 +493,23 @@ function startEditing(event) {
     openFormModal();
     renderCalendar();
     renderEventList();
+}
+
+function parsePermissions() {
+    const rawValue = elements.permissionsData?.textContent?.trim();
+    if (!rawValue) {
+        return [];
+    }
+
+    try {
+        const parsedValue = JSON.parse(rawValue);
+        if (!Array.isArray(parsedValue)) {
+            return [];
+        }
+        return parsedValue.map((item) => String(item));
+    } catch (error) {
+        return [];
+    }
 }
 
 function resetForm(options = {}) {

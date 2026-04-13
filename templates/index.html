@@ -203,5 +203,6 @@
 
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
     <script id="class-roster-data" type="application/json">{{ class_roster|tojson }}</script>
+    <script id="permissions-data" type="application/json">{{ (current_user.permissions if current_user else [])|tojson }}</script>
 </body>
 </html>
