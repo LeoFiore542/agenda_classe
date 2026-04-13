@@ -121,9 +121,16 @@ def create_app(test_config: dict | None = None) -> Flask:
         try:
             Path(app.instance_path).mkdir(parents=True, exist_ok=True)
         except OSError:
-            # On serverless platforms (e.g. Vercel) /var/task is read-only.
-            # Fallback to /tmp so the app can still boot if DATABASE_URL is missing.
             app.config["DATABASE"] = "/tmp/school_planner.db"
+
+    _db_ready = False
+
+    @app.before_request
+    def ensure_db_initialized() -> None:
+        nonlocal _db_ready
+        if not _db_ready:
+            init_db()
+            _db_ready = True
 
     @app.before_request
     def load_current_user() -> None:
@@ -355,9 +362,6 @@ def create_app(test_config: dict | None = None) -> Flask:
         if cursor.rowcount == 0:
             return jsonify({"error": "Evento non trovato."}), 404
         return ("", 204)
-
-    with app.app_context():
-        init_db()
 
     return app
 
