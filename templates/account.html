@@ -109,6 +109,27 @@
             </div>
             {% endif %}
         </section>
+
+        {% if current_user and 'manage_role_assignments' in current_user.permissions %}
+        <section class="panel roles-management-panel" id="roles-management-panel">
+            <div class="panel-heading password-panel-heading">
+                <div>
+                    <p class="eyebrow">Gestione ruoli</p>
+                    <h2>Assegna ruoli agli account</h2>
+                    <p>
+                        In questa sezione puoi vedere chi ha ogni ruolo e modificare le assegnazioni.
+                    </p>
+                </div>
+            </div>
+
+            <p class="roles-feedback" id="roles-feedback" aria-live="polite"></p>
+            <div class="roles-list" id="roles-list"></div>
+        </section>
+        {% endif %}
     </div>
+
+    {% if current_user and 'manage_role_assignments' in current_user.permissions %}
+    <script src="{{ url_for('static', filename='account.js') }}"></script>
+    {% endif %}
 </body>
 </html>

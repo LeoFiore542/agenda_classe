@@ -148,6 +148,80 @@ textarea {
     margin-bottom: 22px;
 }
 
+.roles-management-panel {
+    margin-bottom: 22px;
+}
+
+.roles-feedback {
+    margin: 0 0 14px;
+    min-height: 1.4rem;
+    font-weight: 600;
+}
+
+.roles-feedback.is-success {
+    color: #0f6059;
+}
+
+.roles-feedback.is-error {
+    color: #9c4a23;
+}
+
+.roles-feedback.is-info {
+    color: var(--muted);
+}
+
+.roles-list {
+    display: grid;
+    gap: 14px;
+}
+
+.roles-empty {
+    margin: 0;
+    color: var(--muted);
+}
+
+.role-user-card {
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.role-user-header {
+    margin-bottom: 12px;
+}
+
+.role-user-header h3 {
+    margin: 0;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.1rem;
+}
+
+.role-user-header p {
+    margin: 4px 0 0;
+    color: var(--muted);
+}
+
+.roles-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    align-items: center;
+}
+
+.role-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid rgba(31, 78, 95, 0.12);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.74);
+}
+
+.role-save-button {
+    justify-self: end;
+}
 .password-panel.is-highlighted {
     border-color: rgba(213, 111, 62, 0.28);
     background: linear-gradient(180deg, rgba(255, 245, 238, 0.98), rgba(255, 255, 255, 0.86));
@@ -863,6 +937,14 @@ textarea {
 
     .password-form {
         grid-template-columns: 1fr;
+    }
+
+    .roles-form {
+        grid-template-columns: 1fr;
+    }
+
+    .role-save-button {
+        justify-self: stretch;
     }
 
     .month-actions {
