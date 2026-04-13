@@ -781,29 +781,38 @@ function getEventTypeClassName(eventType) {
 function updateInterrogationFields() {
     const isInterrogation = elements.form.event_type.value === "interrogazione";
     const isGenericEvent = elements.form.event_type.value === "evento";
-    const isTripEvent = isGenericEvent && elements.eventSubjectSelect.value === "Uscita didattica";
+    const selectedEventCategory = elements.eventSubjectSelect.value;
+    const eventNeedsNotes = isGenericEvent && ["Uscita didattica", "Compleanni", "Altro"].includes(selectedEventCategory);
     const isSpecificDays = elements.form.interrogation_mode.value === "specific_days";
 
     elements.interrogationFields.hidden = !isInterrogation;
     elements.subjectTextField.hidden = isGenericEvent;
     elements.eventSubjectField.hidden = !isGenericEvent;
-    elements.notesField.hidden = isGenericEvent && !isTripEvent;
+    elements.notesField.hidden = isGenericEvent && !eventNeedsNotes;
     elements.interrogationEndField.hidden = !isInterrogation || isSpecificDays;
     elements.interrogationDatesField.hidden = !isInterrogation || !isSpecificDays;
     elements.scheduledForField.hidden = isInterrogation && isSpecificDays;
     elements.scheduledForLabel.textContent = isInterrogation ? "Dal" : "Data";
     elements.notesLabel.textContent = isInterrogation
         ? "Argomenti / pagine"
-        : isTripEvent
+        : selectedEventCategory === "Uscita didattica"
             ? "Note sulla gita"
+            : selectedEventCategory === "Compleanni"
+                ? "Chi compie gli anni"
+                : selectedEventCategory === "Altro"
+                    ? "Dettagli evento"
             : "Argomenti";
     elements.notesInput.placeholder = isInterrogation
         ? "Capitolo 5, pagine 120-134, rivoluzione francese..."
-        : isTripEvent
+        : selectedEventCategory === "Uscita didattica"
             ? "Orario, luogo, materiale da portare..."
+            : selectedEventCategory === "Compleanni"
+                ? "Nome e cognome della persona festeggiata..."
+                : selectedEventCategory === "Altro"
+                    ? "Specifica che evento e, orario e informazioni utili..."
             : "Equazioni, capitolo 3, teoremi...";
-    elements.notesInput.disabled = isGenericEvent && !isTripEvent;
-    if (isGenericEvent && !isTripEvent) {
+    elements.notesInput.disabled = isGenericEvent && !eventNeedsNotes;
+    if (isGenericEvent && !eventNeedsNotes) {
         elements.notesInput.value = "";
     }
 
