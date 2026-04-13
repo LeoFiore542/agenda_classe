@@ -53,7 +53,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
         "view_events",
         "manage_countdown_target",
     },
-    "rappresentante": {"create_events", "edit_events", "view_events"},
+    "rappresentante": {"create_events", "edit_events", "delete_events", "view_events"},
     "editor": {"edit_events", "view_events"},
     "alunno": {"view_events"},
 }
