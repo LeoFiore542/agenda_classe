@@ -7,7 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
@@ -39,10 +38,7 @@
         <header class="hero">
             <div>
                 <p class="eyebrow">Classe {{ class_group }}</p>
-                <div class="brand-heading">
-                    <img class="brand-logo" src="{{ url_for('static', filename='logo.png') }}" alt="Logo aGenda">
-                    <h1>aGenda</h1>
-                </div>
+                <h1>aGenda</h1>
                 <p class="hero-copy">
                     Una vista mensile semplice per aggiungere e controllare verifiche con materia, data e argomenti.
                 </p>
