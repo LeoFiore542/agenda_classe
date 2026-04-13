@@ -37,17 +37,14 @@
             </div>
         </div>
 
-        <section class="panel password-panel{% if current_user.must_change_password %} is-highlighted{% endif %}">
+        {% if current_user.must_change_password %}
+        <section class="panel password-panel is-highlighted">
             <div class="panel-heading password-panel-heading">
                 <div>
                     <p class="eyebrow">Sicurezza account</p>
                     <h1 class="account-title">Password personale</h1>
                     <p>
-                        {% if current_user.must_change_password %}
                         Primo accesso rilevato: devi cambiare la password iniziale prima di usare il calendario e le altre funzioni.
-                        {% else %}
-                        Qui puoi aggiornare la tua password personale in qualsiasi momento.
-                        {% endif %}
                     </p>
                 </div>
             </div>
@@ -80,7 +77,9 @@
                 <button class="primary-button password-submit" type="submit">Aggiorna password</button>
             </form>
         </section>
+        {% endif %}
 
+        {% if not current_user.must_change_password %}
         <section class="panel personal-schedule-panel">
             <div class="panel-heading password-panel-heading">
                 <div>
@@ -118,8 +117,9 @@
             </div>
             {% endif %}
         </section>
+        {% endif %}
 
-        {% if current_user and 'manage_role_assignments' in current_user.permissions %}
+        {% if current_user and not current_user.must_change_password and 'manage_role_assignments' in current_user.permissions %}
         <section class="panel roles-management-panel" id="roles-management-panel">
             <div class="panel-heading password-panel-heading">
                 <div>
@@ -137,7 +137,7 @@
         {% endif %}
     </div>
 
-    {% if current_user and 'manage_role_assignments' in current_user.permissions %}
+    {% if current_user and not current_user.must_change_password and 'manage_role_assignments' in current_user.permissions %}
     <script src="{{ url_for('static', filename='account.js') }}"></script>
     {% endif %}
     <script src="{{ url_for('static', filename='password-toggle.js') }}" defer></script>
