@@ -663,6 +663,12 @@ textarea {
     border: 1px solid rgba(31, 78, 95, 0.1);
 }
 
+.schedule-row.is-focused {
+    border-color: rgba(213, 111, 62, 0.45);
+    box-shadow: inset 0 0 0 1px rgba(213, 111, 62, 0.2);
+    background: rgba(255, 248, 241, 0.95);
+}
+
 .schedule-row-header {
     display: flex;
     align-items: center;
@@ -979,6 +985,12 @@ textarea {
     cursor: default;
     pointer-events: none;
     background: rgba(255, 255, 255, 0.92);
+}
+
+.student-pill.is-readonly.is-focused {
+    background: linear-gradient(135deg, var(--accent), #bb5a2d);
+    border-color: transparent;
+    color: #fff;
 }
 
 .modal-heading {

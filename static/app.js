@@ -375,7 +375,7 @@ function renderCalendar() {
             } else {
                 chip.addEventListener("click", (event) => {
                     event.stopPropagation();
-                    openReadOnlyEventModal(eventItem);
+                    openReadOnlyEventModal(eventItem, dateValue);
                 });
             }
             chips.appendChild(chip);
@@ -657,7 +657,7 @@ function closeFormModal(options = {}) {
     }
 }
 
-function openReadOnlyEventModal(event) {
+function openReadOnlyEventModal(event, focusedDate = "") {
     if (!elements.readOnlyEventModal) {
         return;
     }
@@ -666,7 +666,7 @@ function openReadOnlyEventModal(event) {
     elements.readOnlyEventTitle.textContent = `${formatEventTypeLabel(event.event_type)}: ${event.subject}`;
     elements.readOnlyEventSubtitle.textContent = formatEventSchedule(event);
     elements.readOnlyEventNotes.textContent = buildEventDescription(event);
-    renderReadOnlyScheduleRows(scheduleRows);
+    renderReadOnlyScheduleRows(scheduleRows, focusedDate);
 
     elements.readOnlyEventModal.hidden = false;
     elements.readOnlyEventModal.classList.add("is-open");
@@ -684,7 +684,7 @@ function closeReadOnlyEventModal() {
     }
 }
 
-function renderReadOnlyScheduleRows(rows) {
+function renderReadOnlyScheduleRows(rows, focusedDate = "") {
     if (!elements.readOnlyEventSchedule) {
         return;
     }
@@ -706,6 +706,9 @@ function renderReadOnlyScheduleRows(rows) {
     rows.forEach((row) => {
         const rowSection = document.createElement("section");
         rowSection.className = "schedule-row";
+        if (focusedDate && row.date === focusedDate) {
+            rowSection.classList.add("is-focused");
+        }
 
         const rowHeader = document.createElement("div");
         rowHeader.className = "schedule-row-header";
@@ -722,6 +725,9 @@ function renderReadOnlyScheduleRows(rows) {
         row.students.forEach((studentName) => {
             const studentBadge = document.createElement("span");
             studentBadge.className = "student-pill is-readonly";
+            if (focusedDate && row.date === focusedDate) {
+                studentBadge.classList.add("is-focused");
+            }
             studentBadge.textContent = studentName;
             studentsGrid.appendChild(studentBadge);
         });
@@ -836,6 +842,12 @@ function normalizeEventSubjectOption(subjectValue) {
     }
     if (normalizedValue === "assemblea" || normalizedValue === "assemblea di classe") {
         return "Assemblea";
+    }
+    if (normalizedValue === "compleanni") {
+        return "Compleanni";
+    }
+    if (normalizedValue === "altro") {
+        return "Altro";
     }
     return "";
 }

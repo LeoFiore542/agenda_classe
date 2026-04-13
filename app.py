@@ -30,6 +30,8 @@ VALID_EVENT_SUBJECTS = {
     "uscita didattica": "Uscita didattica",
     "assemblea": "Assemblea",
     "assemblea di classe": "Assemblea",
+    "altro": "Altro",
+    "compleanni": "Compleanni",
 }
 DEFAULT_CLASS_GROUP = "4G"
 DEFAULT_EVENT_TYPE = "verifica"
@@ -1221,7 +1223,7 @@ def validate_event_payload(payload: dict) -> tuple[dict[str, str], dict[str, str
     if event_type == "evento":
         subject = VALID_EVENT_SUBJECTS.get(subject.lower(), "")
         if not subject:
-            errors["subject"] = "Per gli eventi scegli solo uscita didattica o assemblea."
+            errors["subject"] = "Per gli eventi scegli uscita didattica, assemblea, compleanni o altro."
     elif not subject:
         errors["subject"] = "La materia e obbligatoria."
     cleaned["subject"] = subject
