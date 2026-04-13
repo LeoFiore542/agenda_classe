@@ -35,7 +35,8 @@ DEFAULT_CLASS_GROUP = "4G"
 DEFAULT_EVENT_TYPE = "verifica"
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8000
-OWNER_USERNAME = "leonardo.fiorini"
+OWNER_USERNAME = "fiorini.leonardo"
+LEGACY_OWNER_USERNAME = "leonardo.fiorini"
 OWNER_FULL_NAME = "Leonardo Fiorini"
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -609,6 +610,22 @@ def seed_roles_and_permissions(database: DatabaseAdapter) -> None:
 
 
 def ensure_owner_account(database: DatabaseAdapter) -> None:
+    if OWNER_USERNAME != LEGACY_OWNER_USERNAME:
+        legacy_row = database.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (LEGACY_OWNER_USERNAME,),
+        ).fetchone()
+        target_row = database.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (OWNER_USERNAME,),
+        ).fetchone()
+
+        if legacy_row is not None and target_row is None:
+            database.execute(
+                "UPDATE users SET username = ?, full_name = ? WHERE id = ?",
+                (OWNER_USERNAME, OWNER_FULL_NAME, legacy_row["id"]),
+            )
+
     owner_row = database.execute(
         "SELECT id FROM users WHERE username = ?",
         (OWNER_USERNAME,),
