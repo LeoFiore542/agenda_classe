@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Area Personale 4G</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="page-shell account-shell">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-stack">
+            {% for category, message in messages %}
+            <div class="panel flash-panel flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="session-bar panel">
+            <div class="session-user">
+                <span class="session-user-label">Area personale</span>
+                <strong>{{ current_user.full_name }}</strong>
+                <span class="session-user-meta">@{{ current_user.username }}</span>
+            </div>
+            <div class="session-actions">
+                {% if not current_user.must_change_password %}
+                <a class="ghost-button" href="{{ url_for('index') }}">Vai al calendario</a>
+                {% endif %}
+                <form method="post" action="{{ url_for('logout') }}">
+                    <button class="ghost-button" type="submit">Esci</button>
+                </form>
+            </div>
+        </div>
+
+        <section class="panel password-panel{% if current_user.must_change_password %} is-highlighted{% endif %}">
+            <div class="panel-heading password-panel-heading">
+                <div>
+                    <p class="eyebrow">Sicurezza account</p>
+                    <h1 class="account-title">Password personale</h1>
+                    <p>
+                        {% if current_user.must_change_password %}
+                        Primo accesso rilevato: devi cambiare la password iniziale prima di usare il calendario e le altre funzioni.
+                        {% else %}
+                        Qui puoi aggiornare la tua password personale in qualsiasi momento.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <form class="event-form simple-form password-form" method="post" action="{{ url_for('change_password') }}">
+                <label>
+                    Password attuale
+                    <input type="password" name="current_password" autocomplete="current-password" required>
+                </label>
+
+                <label>
+                    Nuova password
+                    <input type="password" name="new_password" autocomplete="new-password" minlength="6" required>
+                </label>
+
+                <label>
+                    Conferma nuova password
+                    <input type="password" name="confirm_password" autocomplete="new-password" minlength="6" required>
+                </label>
+
+                <button class="primary-button password-submit" type="submit">Aggiorna password</button>
+            </form>
+        </section>
+
+        <section class="panel personal-schedule-panel">
+            <div class="panel-heading password-panel-heading">
+                <div>
+                    <p class="eyebrow">Agenda personale</p>
+                    <h2>I tuoi giorni con impegni</h2>
+                    <p>
+                        Qui vedi tutte le verifiche, tutti gli eventi e solo i giorni di interrogazione in cui sei coinvolto.
+                    </p>
+                </div>
+            </div>
+
+            {% if personal_schedule %}
+            <div class="personal-schedule-list">
+                {% for day in personal_schedule %}
+                <section class="personal-day-group">
+                    <h3 class="personal-day-title">{{ day['label'] }}</h3>
+                    <div class="personal-day-items">
+                        {% for item in day['items'] %}
+                        <article class="simple-event-card {{ 'event-type-' ~ item.event_type }}">
+                            <div class="simple-event-heading">
+                                <h3>{{ item.subject }}</h3>
+                                <span class="simple-event-badge {{ 'event-type-' ~ item.event_type }}">{{ item.type_label }}</span>
+                            </div>
+                            <p class="simple-event-notes">{{ item.notes }}</p>
+                        </article>
+                        {% endfor %}
+                    </div>
+                </section>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state compact-empty-state">
+                <h3>Nessun impegno personale</h3>
+                <p>Qui compariranno verifiche, eventi e i tuoi giorni di interrogazione ordinati per data.</p>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>

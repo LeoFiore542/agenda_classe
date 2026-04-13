@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda Verifiche Classe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-stack">
+            {% for category, message in messages %}
+            <div class="panel flash-panel flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="session-bar panel">
+            <div class="session-user">
+                <span class="session-user-label">Accesso attivo</span>
+                <strong>{{ current_user.full_name }}</strong>
+                <span class="session-user-meta">@{{ current_user.username }}</span>
+            </div>
+            <div class="session-actions">
+                <a class="ghost-button" href="{{ url_for('account') }}">Area personale</a>
+                <form method="post" action="{{ url_for('logout') }}">
+                    <button class="ghost-button" type="submit">Esci</button>
+                </form>
+            </div>
+        </div>
+
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Classe {{ class_group }}</p>
+                <h1>Calendario verifiche 4G.</h1>
+                <p class="hero-copy">
+                    Una vista mensile semplice per aggiungere e controllare verifiche con materia, data e argomenti.
+                </p>
+            </div>
+            <div class="hero-card">
+                <p class="hero-card-label">Questo mese</p>
+                <div class="hero-card-grid">
+                    <div>
+                        <span id="stat-verifiche" class="hero-card-value">0</span>
+                        <span class="hero-card-text">verifiche</span>
+                    </div>
+                    <div>
+                        <span id="stat-interrogazioni" class="hero-card-value">0</span>
+                        <span class="hero-card-text">interrogazioni</span>
+                    </div>
+                    <div>
+                        <span id="stat-eventi" class="hero-card-value">0</span>
+                        <span class="hero-card-text">eventi</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="layout simple-layout">
+            <section class="panel calendar-panel">
+                <div class="panel-heading toolbar month-toolbar">
+                    <div>
+                        <h2 id="current-month-label">Calendario</h2>
+                        <p>Seleziona un giorno per precompilare la data nel modulo.</p>
+                    </div>
+                    <div class="month-actions">
+                        <button id="prev-month" class="ghost-button month-arrow-button" type="button" aria-label="Mese precedente">←</button>
+                        <button id="next-month" class="ghost-button month-arrow-button" type="button" aria-label="Mese successivo">→</button>
+                    </div>
+                </div>
+
+                <div class="calendar-legend">
+                    <span>Classe fissa: <strong>4G</strong></span>
+                    <span id="selected-date-label">Data selezionata: {{ today }}</span>
+                </div>
+
+                <div class="calendar-scroll">
+                    <div id="calendar-grid" class="calendar-grid" aria-live="polite"></div>
+                </div>
+            </section>
+
+            <aside class="side-column">
+                <section class="panel compact-panel">
+                    <div class="panel-heading">
+                        <h2>Elenco del mese</h2>
+                        <p>Premi un elemento per modificarlo.</p>
+                    </div>
+                    <div id="events-list" class="simple-events-list" aria-live="polite"></div>
+                </section>
+            </aside>
+        </main>
+
+        <button id="open-form-modal" class="floating-add-button" type="button" aria-label="Aggiungi verifica">
+            +
+        </button>
+
+        <div id="form-modal" class="modal-shell" hidden>
+            <div id="modal-backdrop" class="modal-backdrop"></div>
+            <section class="panel modal-panel" role="dialog" aria-modal="true" aria-labelledby="form-title">
+                <div class="panel-heading modal-heading">
+                    <div>
+                        <h2 id="form-title">Aggiungi impegno</h2>
+                        <p id="form-subtitle">Inserisci verifica, interrogazione o evento con data e argomenti.</p>
+                    </div>
+                    <button id="close-form-modal" class="icon-button" type="button" aria-label="Chiudi finestra">×</button>
+                </div>
+
+                <form id="event-form" class="event-form simple-form">
+                    <label>
+                        Tipo
+                        <select name="event_type" required>
+                            <option value="verifica">Verifica</option>
+                            <option value="interrogazione">Interrogazione</option>
+                            <option value="evento">Evento</option>
+                        </select>
+                    </label>
+
+                    <label id="subject-text-field">
+                        Materia o titolo
+                        <input id="subject-input" type="text" name="subject" placeholder="Matematica, assemblea, uscita...">
+                    </label>
+
+                    <label id="event-subject-field" hidden>
+                        Tipo di evento
+                        <select id="event-subject-select">
+                            <option value="">Seleziona</option>
+                            <option value="Uscita didattica">Uscita didattica</option>
+                            <option value="Assemblea">Assemblea</option>
+                        </select>
+                    </label>
+
+                    <label id="scheduled-for-field">
+                        <span id="scheduled-for-label">Data</span>
+                        <input type="date" name="scheduled_for" value="{{ today }}" required>
+                    </label>
+
+                    <div id="interrogation-fields" class="interrogation-fields" hidden>
+                        <label>
+                            Modalità interrogazione
+                            <select name="interrogation_mode">
+                                <option value="period">Periodo (da - a)</option>
+                                <option value="specific_days">Giorni specifici</option>
+                            </select>
+                        </label>
+
+                        <label id="interrogation-end-field" hidden>
+                            Al
+                            <input type="date" name="interrogation_end">
+                        </label>
+
+                        <label id="interrogation-dates-field" hidden>
+                            Giorni specifici
+                            <textarea name="interrogation_dates" rows="4" placeholder="2026-04-14&#10;2026-04-21&#10;2026-04-28"></textarea>
+                            <small class="field-help">Inserisci un giorno per riga.</small>
+                        </label>
+
+                        <input type="hidden" name="interrogation_schedule">
+                        <div id="interrogation-schedule-builder" class="schedule-builder"></div>
+                        <small class="field-help">Per ogni giorno seleziona gli interrogati dall'elenco della classe.</small>
+                    </div>
+
+                    <label id="notes-field">
+                        <span id="notes-label">Argomenti</span>
+                        <textarea id="notes-input" name="notes" rows="5" placeholder="Equazioni, capitolo 3, teoremi..."></textarea>
+                    </label>
+
+                    <div class="form-actions stacked-actions">
+                        <button id="submit-button" type="submit" class="primary-button">Aggiungi impegno</button>
+                        <button id="cancel-edit" type="button" class="ghost-button" hidden>Annulla modifica</button>
+                        <p id="form-feedback" class="form-feedback" aria-live="polite"></p>
+                    </div>
+                </form>
+            </section>
+        </div>
+
+        <div id="random-picker-modal" class="modal-shell" hidden>
+            <div id="random-picker-backdrop" class="modal-backdrop"></div>
+            <section class="panel random-picker-panel" role="dialog" aria-modal="true" aria-labelledby="random-picker-title">
+                <div class="panel-heading modal-heading">
+                    <div>
+                        <h2 id="random-picker-title">Ruota dei nomi</h2>
+                        <p id="random-picker-subtitle">Estrazione casuale per il giorno selezionato.</p>
+                    </div>
+                    <button id="random-picker-close" class="icon-button" type="button" aria-label="Chiudi ruota dei nomi">×</button>
+                </div>
+
+                <div class="random-picker-body">
+                    <p id="random-picker-date" class="random-picker-date"></p>
+                    <div id="random-picker-name" class="random-picker-name">-</div>
+                    <p id="random-picker-status" class="random-picker-status">Premi il pulsante nella scheda del giorno per avviare l'estrazione.</p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+    <script id="class-roster-data" type="application/json">{{ class_roster|tojson }}</script>
+</body>
+</html>
