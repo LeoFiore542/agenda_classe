@@ -71,10 +71,12 @@ document.addEventListener("DOMContentLoaded", () => {
 function bindEvents() {
     elements.form.addEventListener("submit", handleCreateEvent);
     elements.cancelEditButton.addEventListener("click", () => closeFormModal());
-    elements.openFormModalButton.addEventListener("click", () => {
-        resetForm({ selectedDate: state.selectedDate, feedback: "" });
-        openFormModal();
-    });
+    if (elements.openFormModalButton) {
+        elements.openFormModalButton.addEventListener("click", () => {
+            resetForm({ selectedDate: state.selectedDate, feedback: "" });
+            openFormModal();
+        });
+    }
     elements.closeFormModalButton.addEventListener("click", () => closeFormModal());
     elements.modalBackdrop.addEventListener("click", () => closeFormModal());
     elements.randomPickerCloseButton.addEventListener("click", () => closeRandomPickerModal());

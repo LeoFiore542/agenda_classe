@@ -96,9 +96,11 @@
             </aside>
         </main>
 
+        {% if current_user and 'create_events' in current_user.permissions %}
         <button id="open-form-modal" class="floating-add-button" type="button" aria-label="Aggiungi verifica">
             +
         </button>
+        {% endif %}
 
         <div id="form-modal" class="modal-shell" hidden>
             <div id="modal-backdrop" class="modal-backdrop"></div>

@@ -580,6 +580,18 @@ textarea {
     font-weight: 700;
 }
 
+.password-input-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.password-toggle {
+    padding: 10px 14px;
+    white-space: nowrap;
+}
+
 .field-help {
     font-size: 0.82rem;
     font-weight: 600;

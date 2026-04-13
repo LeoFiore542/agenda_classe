@@ -34,7 +34,10 @@
 
                 <label>
                     Password
-                    <input type="password" name="password" placeholder="Inserisci la password" autocomplete="current-password" required>
+                    <div class="password-input-wrap">
+                        <input type="password" name="password" placeholder="Inserisci la password" autocomplete="current-password" required data-password-field>
+                        <button type="button" class="ghost-button password-toggle" data-password-toggle>Mostra</button>
+                    </div>
                 </label>
 
                 {% if error_message %}
@@ -45,5 +48,6 @@
             </form>
         </section>
     </main>
+    <script src="{{ url_for('static', filename='password-toggle.js') }}" defer></script>
 </body>
 </html>

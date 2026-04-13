@@ -55,17 +55,26 @@
             <form class="event-form simple-form password-form" method="post" action="{{ url_for('change_password') }}">
                 <label>
                     Password attuale
-                    <input type="password" name="current_password" autocomplete="current-password" required>
+                    <div class="password-input-wrap">
+                        <input type="password" name="current_password" autocomplete="current-password" required data-password-field>
+                        <button type="button" class="ghost-button password-toggle" data-password-toggle>Mostra</button>
+                    </div>
                 </label>
 
                 <label>
                     Nuova password
-                    <input type="password" name="new_password" autocomplete="new-password" minlength="6" required>
+                    <div class="password-input-wrap">
+                        <input type="password" name="new_password" autocomplete="new-password" minlength="6" required data-password-field>
+                        <button type="button" class="ghost-button password-toggle" data-password-toggle>Mostra</button>
+                    </div>
                 </label>
 
                 <label>
                     Conferma nuova password
-                    <input type="password" name="confirm_password" autocomplete="new-password" minlength="6" required>
+                    <div class="password-input-wrap">
+                        <input type="password" name="confirm_password" autocomplete="new-password" minlength="6" required data-password-field>
+                        <button type="button" class="ghost-button password-toggle" data-password-toggle>Mostra</button>
+                    </div>
                 </label>
 
                 <button class="primary-button password-submit" type="submit">Aggiorna password</button>
@@ -131,5 +140,6 @@
     {% if current_user and 'manage_role_assignments' in current_user.permissions %}
     <script src="{{ url_for('static', filename='account.js') }}"></script>
     {% endif %}
+    <script src="{{ url_for('static', filename='password-toggle.js') }}" defer></script>
 </body>
 </html>
