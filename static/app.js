@@ -7,6 +7,7 @@ const state = {
     classRoster: [],
     permissions: [],
     canEditEvents: false,
+    canDeleteEvents: false,
     randomPicker: {
         intervalId: null,
         timeoutId: null,
@@ -63,6 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.classRoster = parseClassRoster();
     state.permissions = parsePermissions();
     state.canEditEvents = state.permissions.includes("edit_events");
+    state.canDeleteEvents = state.permissions.includes("delete_events");
     elements.form.event_type.value = "verifica";
     elements.form.interrogation_mode.value = "period";
     elements.form.scheduled_for.value = state.selectedDate;
@@ -379,15 +381,17 @@ function renderEventList() {
         badge.textContent = formatEventTypeLabel(event.event_type);
         footer.appendChild(badge);
 
-        const deleteButton = document.createElement("button");
-        deleteButton.type = "button";
-        deleteButton.className = "danger-button";
-        deleteButton.textContent = "Elimina";
-        deleteButton.addEventListener("click", (clickEvent) => {
-            clickEvent.stopPropagation();
-            deleteEvent(event.id);
-        });
-        footer.appendChild(deleteButton);
+        if (state.canDeleteEvents) {
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "danger-button";
+            deleteButton.textContent = "Elimina";
+            deleteButton.addEventListener("click", (clickEvent) => {
+                clickEvent.stopPropagation();
+                deleteEvent(event.id);
+            });
+            footer.appendChild(deleteButton);
+        }
 
         article.appendChild(footer);
         elements.eventsList.appendChild(article);
