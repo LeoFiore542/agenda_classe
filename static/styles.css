@@ -99,6 +99,13 @@ textarea {
     gap: 2px;
 }
 
+.session-logo {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    margin-bottom: 2px;
+}
+
 .session-user-label,
 .session-user-meta {
     color: var(--muted);
@@ -327,6 +334,19 @@ textarea {
 .simple-event-heading h3 {
     margin: 0;
     font-family: "Space Grotesk", sans-serif;
+}
+
+.brand-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-logo {
+    width: 56px;
+    height: 56px;
+    object-fit: contain;
+    border-radius: 14px;
 }
 
 .hero h1 {
