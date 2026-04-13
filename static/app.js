@@ -443,6 +443,31 @@ function renderEventList() {
         notes.textContent = buildEventDescription(event);
         article.appendChild(notes);
 
+        const interrogationScheduleRows = buildInterrogationScheduleRows(event);
+        if (interrogationScheduleRows.length > 0) {
+            const scheduleList = document.createElement("ul");
+            scheduleList.className = "interrogation-schedule-preview";
+
+            interrogationScheduleRows.forEach((row) => {
+                const listItem = document.createElement("li");
+                listItem.className = "interrogation-schedule-row";
+
+                const day = document.createElement("span");
+                day.className = "interrogation-schedule-day";
+                day.textContent = formatDate(row.date);
+                listItem.appendChild(day);
+
+                const students = document.createElement("span");
+                students.className = "interrogation-schedule-students";
+                students.textContent = row.students.join(", ");
+                listItem.appendChild(students);
+
+                scheduleList.appendChild(listItem);
+            });
+
+            article.appendChild(scheduleList);
+        }
+
         const footer = document.createElement("div");
         footer.className = "simple-event-footer";
 
@@ -968,6 +993,37 @@ function buildEventDescription(event) {
     }
 
     return "Nessun dettaglio inserito.";
+}
+
+function buildInterrogationScheduleRows(event) {
+    if (event.event_type !== "interrogazione") {
+        return [];
+    }
+
+    const parsedSchedule = parseInterrogationSchedule(event.interrogation_schedule || "");
+    const rows = Object.entries(parsedSchedule)
+        .map(([dateValue, students]) => ({
+            date: dateValue,
+            students,
+        }))
+        .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date) && row.students.length > 0)
+        .sort((left, right) => left.date.localeCompare(right.date));
+
+    if (rows.length > 0) {
+        return rows;
+    }
+
+    const legacyStudents = parseMultilineList(event.interrogated_students || "");
+    if (legacyStudents.length === 0) {
+        return [];
+    }
+
+    return [
+        {
+            date: event.scheduled_for,
+            students: legacyStudents,
+        },
+    ];
 }
 
 function parseClassRoster() {
