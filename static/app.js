@@ -8,6 +8,7 @@ const state = {
     permissions: [],
     canEditEvents: false,
     canDeleteEvents: false,
+    countdownRefreshTimeoutId: null,
     randomPicker: {
         intervalId: null,
         timeoutId: null,
@@ -145,14 +146,43 @@ async function loadCountdown() {
         return;
     }
 
+    if (state.countdownRefreshTimeoutId !== null) {
+        clearTimeout(state.countdownRefreshTimeoutId);
+        state.countdownRefreshTimeoutId = null;
+    }
+
     const response = await fetch("/api/countdown");
     if (!response.ok) {
         elements.countdownTargetLabel.textContent = "Impossibile caricare il conto alla rovescia.";
+        scheduleCountdownRefresh();
         return;
     }
 
     const payload = await response.json();
     renderCountdown(payload);
+    scheduleCountdownRefresh();
+}
+
+function getCountdownRefreshDelayMs() {
+    const now = new Date();
+    const nextRefresh = new Date(now);
+    nextRefresh.setHours(14, 0, 0, 0);
+
+    if (now >= nextRefresh) {
+        nextRefresh.setDate(nextRefresh.getDate() + 1);
+    }
+
+    return nextRefresh.getTime() - now.getTime();
+}
+
+function scheduleCountdownRefresh() {
+    if (state.countdownRefreshTimeoutId !== null) {
+        clearTimeout(state.countdownRefreshTimeoutId);
+        state.countdownRefreshTimeoutId = null;
+    }
+
+    const delayMs = getCountdownRefreshDelayMs();
+    state.countdownRefreshTimeoutId = window.setTimeout(loadCountdown, delayMs);
 }
 
 function renderCountdown(payload) {

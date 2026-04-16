@@ -8,7 +8,7 @@ import sqlite3
 import subprocess
 import time
 import unicodedata
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -931,8 +931,12 @@ def build_school_countdown_payload() -> dict[str, object]:
             "school_hours_remaining": 0,
         }
 
+    start_date = today
+    if datetime.now().hour >= 14:
+        start_date = date.fromordinal(today.toordinal() + 1)
+
     target_date = date.fromisoformat(target_iso)
-    weekdays_remaining = count_weekdays_between(today, target_date)
+    weekdays_remaining = count_weekdays_between(start_date, target_date)
     return {
         "today": today.isoformat(),
         "target_date": target_iso,
