@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -133,6 +134,36 @@ class AppTestCase(unittest.TestCase):
         self.assertIn("Storia", page)
         self.assertIn(format_long_date("2026-04-29"), page)
         self.assertNotIn(format_long_date("2026-04-28"), page)
+
+    def test_account_does_not_show_past_personal_events(self):
+        self.login_and_change_password()
+
+        yesterday = date.today() - timedelta(days=1)
+        tomorrow = date.today() + timedelta(days=1)
+
+        self.client.post(
+            "/api/events",
+            json={
+                "subject": "Matematica",
+                "scheduled_for": yesterday.isoformat(),
+                "notes": "Passata",
+            },
+        )
+        self.client.post(
+            "/api/events",
+            json={
+                "subject": "Fisica",
+                "scheduled_for": tomorrow.isoformat(),
+                "notes": "Futura",
+            },
+        )
+
+        account_response = self.client.get("/account")
+        page = account_response.get_data(as_text=True)
+
+        self.assertEqual(account_response.status_code, 200)
+        self.assertNotIn("Matematica", page)
+        self.assertIn("Fisica", page)
 
     def test_create_and_list_event(self):
         self.login_and_change_password()

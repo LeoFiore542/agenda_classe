@@ -1124,7 +1124,7 @@ def build_personal_schedule(full_name: str) -> list[dict[str, object]]:
         if event["event_type"] == "interrogazione":
             schedule = parse_interrogation_schedule_json(event.get("interrogation_schedule", ""))
             for date_value, students in schedule.items():
-                if full_name not in students:
+                if full_name not in students or not is_date_in_future_or_today(date_value):
                     continue
                 grouped_schedule.setdefault(date_value, []).append(
                     {
@@ -1134,6 +1134,9 @@ def build_personal_schedule(full_name: str) -> list[dict[str, object]]:
                         "notes": event["notes"] or "Argomenti o pagine non inseriti.",
                     }
                 )
+            continue
+
+        if not is_date_in_future_or_today(event["scheduled_for"]):
             continue
 
         grouped_schedule.setdefault(event["scheduled_for"], []).append(
@@ -1190,6 +1193,13 @@ def parse_interrogation_schedule_json(value: str) -> dict[str, list[str]]:
         elif isinstance(students, str):
             normalized[date_value] = normalize_multiline_text(students).splitlines()
     return normalized
+
+
+def is_date_in_future_or_today(value: str) -> bool:
+    try:
+        return date.fromisoformat(value) >= date.today()
+    except ValueError:
+        return False
 
 
 def format_event_type_label(event_type: str) -> str:
