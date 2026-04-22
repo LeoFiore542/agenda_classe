@@ -21,7 +21,7 @@ class AppTestCase(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def login(self, full_name: str = "Abbruzzese Elisa", password: Optional[str] = None):
+    def login(self, full_name: str = "Abruzzese Elisa", password: Optional[str] = None):
         username = build_username_from_full_name(full_name)
         return self.client.post(
             "/login",
@@ -32,7 +32,7 @@ class AppTestCase(unittest.TestCase):
             follow_redirects=False,
         )
 
-    def login_and_change_password(self, full_name: str = "Abbruzzese Elisa", new_password: str = "nuova-password-4g"):
+    def login_and_change_password(self, full_name: str = "Abruzzese Elisa", new_password: str = "nuova-password-4g"):
         username = build_username_from_full_name(full_name)
         self.login(full_name=full_name)
         return self.client.post(
@@ -72,7 +72,7 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(api_response.status_code, 403)
 
     def test_change_personal_password_after_first_login(self):
-        username = build_username_from_full_name("Abbruzzese Elisa")
+        username = build_username_from_full_name("Abruzzese Elisa")
         self.login()
 
         change_response = self.login_and_change_password(new_password="nuova-password-4g")
@@ -118,7 +118,7 @@ class AppTestCase(unittest.TestCase):
                 "interrogation_schedule": json.dumps(
                     {
                         "2026-04-28": ["Giulia Bianchi"],
-                        "2026-04-29": ["Abbruzzese Elisa"],
+                        "2026-04-29": ["Abruzzese Elisa"],
                     }
                 ),
                 "notes": "Capitolo 7",
