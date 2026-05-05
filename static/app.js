@@ -8,6 +8,11 @@ const state = {
     permissions: [],
     canEditEvents: false,
     canDeleteEvents: false,
+    showOnlyInvolvedEvents: false,
+    currentUser: {
+        username: "",
+        full_name: "",
+    },
     countdownRefreshTimeoutId: null,
     randomPicker: {
         intervalId: null,
@@ -71,11 +76,14 @@ const elements = {
     countdownTargetLabel: document.querySelector("#countdown-target-label"),
     countdownSettingsForm: document.querySelector("#countdown-settings-form"),
     countdownTargetInput: document.querySelector("#countdown-target-input"),
+    toggleInvolvedFilterButton: document.querySelector("#toggle-involved-filter"),
+    currentUserData: document.querySelector("#current-user-data"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
     state.classRoster = parseClassRoster();
     state.permissions = parsePermissions();
+    state.currentUser = parseCurrentUser();
     state.canEditEvents = state.permissions.includes("edit_events");
     state.canDeleteEvents = state.permissions.includes("delete_events");
     elements.form.event_type.value = "verifica";
@@ -138,6 +146,16 @@ function bindEvents() {
 
     if (elements.countdownSettingsForm) {
         elements.countdownSettingsForm.addEventListener("submit", handleUpdateCountdownTarget);
+    }
+    if (elements.toggleInvolvedFilterButton) {
+        elements.toggleInvolvedFilterButton.addEventListener("click", () => {
+            state.showOnlyInvolvedEvents = !state.showOnlyInvolvedEvents;
+            updateInvolvedFilterButton();
+            renderCalendar();
+            renderEventList();
+            renderSummary();
+        });
+        updateInvolvedFilterButton();
     }
 }
 
@@ -331,7 +349,7 @@ function renderCalendar() {
         elements.calendarGrid.appendChild(filler);
     }
 
-    const eventsByDate = groupByDate(expandEventsByDate(state.events));
+    const eventsByDate = groupByDate(expandEventsByDate(getVisibleEvents()));
 
     for (let day = 1; day <= lastDayOfMonth.getDate(); day += 1) {
         const dateValue = `${state.displayedMonth}-${String(day).padStart(2, "0")}`;
@@ -432,18 +450,19 @@ function renderCalendar() {
 
 function renderEventList() {
     elements.eventsList.innerHTML = "";
+    const visibleEvents = getVisibleEvents();
 
-    if (state.events.length === 0) {
+    if (visibleEvents.length === 0) {
         elements.eventsList.innerHTML = `
             <div class="empty-state compact-empty-state">
-                <h3>Nessuna verifica nel mese</h3>
-                <p>Aggiungi la prima verifica dal modulo qui accanto.</p>
+                <h3>${state.showOnlyInvolvedEvents ? "Nessun impegno che ti coinvolge" : "Nessuna verifica nel mese"}</h3>
+                <p>${state.showOnlyInvolvedEvents ? "Disattiva il filtro per vedere tutti gli impegni del mese." : "Aggiungi la prima verifica dal modulo qui accanto."}</p>
             </div>
         `;
         return;
     }
 
-    state.events.forEach((event) => {
+    visibleEvents.forEach((event) => {
         const article = document.createElement("article");
         article.className = "simple-event-card";
         article.classList.add(getEventTypeClassName(event.event_type));
@@ -516,7 +535,7 @@ function renderEventList() {
 }
 
 function renderSummary() {
-    const counts = state.events.reduce(
+    const counts = getVisibleEvents().reduce(
         (summary, event) => {
             if (event.event_type === "interrogazione") {
                 summary.interrogazioni += 1;
@@ -533,6 +552,38 @@ function renderSummary() {
     elements.heroVerifiche.textContent = String(counts.verifiche);
     elements.heroInterrogazioni.textContent = String(counts.interrogazioni);
     elements.heroEventi.textContent = String(counts.eventi);
+}
+
+function getVisibleEvents() {
+    if (!state.showOnlyInvolvedEvents) {
+        return state.events;
+    }
+    return state.events.filter((event) => isUserInvolvedInEvent(event));
+}
+
+function isUserInvolvedInEvent(event) {
+    const username = String(state.currentUser.username || "").trim().toLowerCase();
+    const fullName = String(state.currentUser.full_name || "").trim().toLowerCase();
+    if (!username && !fullName) {
+        return false;
+    }
+
+    const createdBy = String(event.created_by || "").trim().toLowerCase();
+    if (createdBy && (createdBy === username || createdBy === fullName)) {
+        return true;
+    }
+
+    if (event.event_type !== "interrogazione") {
+        return false;
+    }
+
+    const scheduleRows = buildInterrogationScheduleRows(event);
+    return scheduleRows.some((row) =>
+        row.students.some((student) => {
+            const normalizedStudent = String(student || "").trim().toLowerCase();
+            return normalizedStudent && normalizedStudent === fullName;
+        })
+    );
 }
 
 function groupByDate(events) {
@@ -631,6 +682,35 @@ function parsePermissions() {
     } catch (error) {
         return [];
     }
+}
+
+function parseCurrentUser() {
+    const rawValue = elements.currentUserData?.textContent?.trim();
+    if (!rawValue) {
+        return { username: "", full_name: "" };
+    }
+
+    try {
+        const parsedValue = JSON.parse(rawValue);
+        if (!parsedValue || typeof parsedValue !== "object") {
+            return { username: "", full_name: "" };
+        }
+        return {
+            username: String(parsedValue.username || ""),
+            full_name: String(parsedValue.full_name || ""),
+        };
+    } catch (error) {
+        return { username: "", full_name: "" };
+    }
+}
+
+function updateInvolvedFilterButton() {
+    if (!elements.toggleInvolvedFilterButton) {
+        return;
+    }
+    elements.toggleInvolvedFilterButton.textContent = state.showOnlyInvolvedEvents
+        ? "Mostra tutti gli impegni"
+        : "Mostra solo i miei impegni";
 }
 
 function resetForm(options = {}) {

@@ -108,6 +108,9 @@
                     <span>Classe fissa: <strong>4G</strong></span>
                     <span id="selected-date-label">Data selezionata: {{ today }}</span>
                 </div>
+                <div class="calendar-legend">
+                    <button id="toggle-involved-filter" class="ghost-button" type="button">Mostra solo i miei impegni</button>
+                </div>
 
                 <div class="calendar-scroll">
                     <div id="calendar-grid" class="calendar-grid" aria-live="polite"></div>
@@ -252,5 +255,6 @@
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
     <script id="class-roster-data" type="application/json">{{ class_roster|tojson }}</script>
     <script id="permissions-data" type="application/json">{{ (current_user.permissions if current_user else [])|tojson }}</script>
+    <script id="current-user-data" type="application/json">{{ ({"username": current_user.username, "full_name": current_user.full_name} if current_user else {})|tojson }}</script>
 </body>
 </html>
