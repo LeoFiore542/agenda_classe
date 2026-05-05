@@ -568,13 +568,13 @@ function isUserInvolvedInEvent(event) {
         return false;
     }
 
-    const createdBy = String(event.created_by || "").trim().toLowerCase();
-    if (createdBy && (createdBy === username || createdBy === fullName)) {
-        return true;
-    }
-
     if (event.event_type !== "interrogazione") {
-        return false;
+        const eventSubject = String(event.subject || "").trim().toLowerCase();
+        const eventNotes = String(event.notes || "").trim().toLowerCase();
+        return Boolean(
+            (fullName && (eventSubject.includes(fullName) || eventNotes.includes(fullName))) ||
+            (username && (eventSubject.includes(username) || eventNotes.includes(username)))
+        );
     }
 
     const scheduleRows = buildInterrogationScheduleRows(event);
