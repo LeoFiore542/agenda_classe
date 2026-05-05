@@ -8,7 +8,7 @@ const state = {
     permissions: [],
     canEditEvents: false,
     canDeleteEvents: false,
-    showOnlyInvolvedEvents: false,
+    highlightPersonalEvents: false,
     currentUser: {
         username: "",
         full_name: "",
@@ -149,11 +149,9 @@ function bindEvents() {
     }
     if (elements.toggleInvolvedFilterButton) {
         elements.toggleInvolvedFilterButton.addEventListener("click", () => {
-            state.showOnlyInvolvedEvents = !state.showOnlyInvolvedEvents;
+            state.highlightPersonalEvents = !state.highlightPersonalEvents;
             updateInvolvedFilterButton();
             renderCalendar();
-            renderEventList();
-            renderSummary();
         });
         updateInvolvedFilterButton();
     }
@@ -349,7 +347,7 @@ function renderCalendar() {
         elements.calendarGrid.appendChild(filler);
     }
 
-    const eventsByDate = groupByDate(expandEventsByDate(getVisibleEvents()));
+    const eventsByDate = groupByDate(expandEventsByDate(state.events));
 
     for (let day = 1; day <= lastDayOfMonth.getDate(); day += 1) {
         const dateValue = `${state.displayedMonth}-${String(day).padStart(2, "0")}`;
@@ -404,6 +402,12 @@ function renderCalendar() {
         summary.className = "calendar-day-summary";
 
         const items = eventsByDate.get(dateValue) || [];
+        const personalOccurrences = items.filter((eventOccurrence) =>
+            isPersonalRelevantOccurrence(eventOccurrence.sourceEvent, dateValue)
+        );
+        if (state.highlightPersonalEvents && personalOccurrences.length > 0) {
+            dayCard.classList.add("is-personal-focus");
+        }
         items.forEach((eventOccurrence) => {
             const eventItem = eventOccurrence.sourceEvent;
             const chip = document.createElement("button");
@@ -412,6 +416,9 @@ function renderCalendar() {
             chip.classList.add(getEventTypeClassName(eventItem.event_type));
             if (eventItem.id === state.editingEventId) {
                 chip.classList.add("is-editing");
+            }
+            if (state.highlightPersonalEvents && isPersonalRelevantOccurrence(eventItem, dateValue)) {
+                chip.classList.add("is-personal-focus");
             }
             chip.textContent = eventItem.subject;
             chip.title = `Apri ${formatEventTypeLabel(eventItem.event_type).toLowerCase()}: ${eventItem.subject}`;
@@ -450,19 +457,18 @@ function renderCalendar() {
 
 function renderEventList() {
     elements.eventsList.innerHTML = "";
-    const visibleEvents = getVisibleEvents();
 
-    if (visibleEvents.length === 0) {
+    if (state.events.length === 0) {
         elements.eventsList.innerHTML = `
             <div class="empty-state compact-empty-state">
-                <h3>${state.showOnlyInvolvedEvents ? "Nessun impegno che ti coinvolge" : "Nessuna verifica nel mese"}</h3>
-                <p>${state.showOnlyInvolvedEvents ? "Disattiva il filtro per vedere tutti gli impegni del mese." : "Aggiungi la prima verifica dal modulo qui accanto."}</p>
+                <h3>Nessuna verifica nel mese</h3>
+                <p>Aggiungi la prima verifica dal modulo qui accanto.</p>
             </div>
         `;
         return;
     }
 
-    visibleEvents.forEach((event) => {
+    state.events.forEach((event) => {
         const article = document.createElement("article");
         article.className = "simple-event-card";
         article.classList.add(getEventTypeClassName(event.event_type));
@@ -535,7 +541,7 @@ function renderEventList() {
 }
 
 function renderSummary() {
-    const counts = getVisibleEvents().reduce(
+    const counts = state.events.reduce(
         (summary, event) => {
             if (event.event_type === "interrogazione") {
                 summary.interrogazioni += 1;
@@ -554,35 +560,30 @@ function renderSummary() {
     elements.heroEventi.textContent = String(counts.eventi);
 }
 
-function getVisibleEvents() {
-    if (!state.showOnlyInvolvedEvents) {
-        return state.events;
-    }
-    return state.events.filter((event) => isUserInvolvedInEvent(event));
-}
-
-function isUserInvolvedInEvent(event) {
+function isPersonalRelevantOccurrence(event, dateValue) {
     const username = String(state.currentUser.username || "").trim().toLowerCase();
     const fullName = String(state.currentUser.full_name || "").trim().toLowerCase();
     if (!username && !fullName) {
         return false;
     }
 
+    if (!isDateInFutureOrToday(dateValue)) {
+        return false;
+    }
+
+    if (event.event_type === "verifica") {
+        return true;
+    }
+
     if (event.event_type !== "interrogazione") {
-        const eventSubject = String(event.subject || "").trim().toLowerCase();
-        const eventNotes = String(event.notes || "").trim().toLowerCase();
-        return Boolean(
-            (fullName && (eventSubject.includes(fullName) || eventNotes.includes(fullName))) ||
-            (username && (eventSubject.includes(username) || eventNotes.includes(username)))
-        );
+        return false;
     }
 
     const scheduleRows = buildInterrogationScheduleRows(event);
-    return scheduleRows.some((row) =>
-        row.students.some((student) => {
-            const normalizedStudent = String(student || "").trim().toLowerCase();
-            return normalizedStudent && normalizedStudent === fullName;
-        })
+    return scheduleRows.some(
+        (row) =>
+            row.date === dateValue &&
+            row.students.some((student) => String(student || "").trim().toLowerCase() === fullName)
     );
 }
 
@@ -708,9 +709,19 @@ function updateInvolvedFilterButton() {
     if (!elements.toggleInvolvedFilterButton) {
         return;
     }
-    elements.toggleInvolvedFilterButton.textContent = state.showOnlyInvolvedEvents
-        ? "Mostra tutti gli impegni"
-        : "Mostra solo i miei impegni";
+    elements.toggleInvolvedFilterButton.textContent = state.highlightPersonalEvents
+        ? "Disattiva evidenza personale"
+        : "Evidenzia i miei impegni";
+}
+
+function isDateInFutureOrToday(value) {
+    const target = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(target.getTime())) {
+        return false;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return target >= today;
 }
 
 function resetForm(options = {}) {

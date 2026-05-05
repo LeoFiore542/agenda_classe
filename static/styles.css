@@ -490,6 +490,11 @@ textarea {
     background: linear-gradient(180deg, rgba(255, 245, 238, 0.98), rgba(255, 255, 255, 0.86));
 }
 
+.calendar-day.is-personal-focus {
+    border-color: rgba(15, 122, 114, 0.45);
+    box-shadow: 0 10px 24px rgba(15, 122, 114, 0.14);
+}
+
 .calendar-day.is-today .calendar-day-number {
     color: var(--accent);
 }
@@ -600,6 +605,11 @@ textarea {
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
+}
+
+.calendar-chip.is-personal-focus {
+    outline: 2px solid rgba(15, 122, 114, 0.42);
+    outline-offset: 1px;
 }
 
 .calendar-chip.is-editing,
