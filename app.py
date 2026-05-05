@@ -43,6 +43,7 @@ LEGACY_OWNER_USERNAME = "leonardo.fiorini"
 OWNER_FULL_NAME = "Leonardo Fiorini"
 CREDENTIAL_RESET_MIGRATION_KEY = "credential_reset_2026_04"
 COUNTDOWN_TARGET_DATE_KEY = "school_countdown_target_date"
+USEFUL_LINKS_KEY = "useful_links"
 SCHOOL_HOURS_PER_DAY = 6
 
 ROLE_PERMISSIONS: dict[str, set[str]] = {
@@ -284,6 +285,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             today=date.today().isoformat(),
             class_group=DEFAULT_CLASS_GROUP,
             class_roster=read_class_roster(),
+            is_owner=is_current_user_owner(),
         )
 
     @app.get("/api/events")
@@ -419,6 +421,29 @@ def create_app(test_config: dict | None = None) -> Flask:
     @password_change_not_required
     def get_school_countdown():
         return jsonify(build_school_countdown_payload())
+
+    @app.get("/api/links")
+    @login_required
+    @password_change_not_required
+    def get_useful_links():
+        return jsonify({"links": get_useful_links_payload()})
+
+    @app.put("/api/links")
+    @login_required
+    @password_change_not_required
+    def update_useful_links():
+        if not is_current_user_owner():
+            return jsonify({"error": "Solo l'owner puo modificare i collegamenti."}), 403
+
+        payload = request.get_json(silent=True) or {}
+        links_payload = payload.get("links", [])
+        normalized_links, errors = normalize_useful_links_payload(links_payload)
+        if errors:
+            return jsonify({"errors": errors}), 400
+
+        set_app_setting(USEFUL_LINKS_KEY, json.dumps(normalized_links, ensure_ascii=False))
+        get_db().commit()
+        return jsonify({"links": normalized_links})
 
     @app.put("/api/countdown")
     @login_required
@@ -881,6 +906,14 @@ def fetch_users_with_roles() -> list[dict[str, object]]:
     return payload
 
 
+def is_current_user_owner() -> bool:
+    current_user = g.get("current_user")
+    if not current_user:
+        return False
+    username = str(current_user.get("username", "")).strip().lower()
+    return username in {OWNER_USERNAME, LEGACY_OWNER_USERNAME}
+
+
 def get_app_setting(key: str) -> str | None:
     row = get_db().execute(
         "SELECT value FROM app_settings WHERE key = ?",
@@ -900,6 +933,41 @@ def set_app_setting(key: str, value: str) -> None:
         """,
         (key, value),
     )
+
+
+def get_useful_links_payload() -> list[dict[str, str]]:
+    raw_value = get_app_setting(USEFUL_LINKS_KEY)
+    if not raw_value:
+        return []
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return []
+    normalized_links, errors = normalize_useful_links_payload(parsed)
+    if errors:
+        return []
+    return normalized_links
+
+
+def normalize_useful_links_payload(links_payload: object) -> tuple[list[dict[str, str]], dict[str, str]]:
+    if not isinstance(links_payload, list):
+        return [], {"links": "Formato collegamenti non valido."}
+
+    normalized_links: list[dict[str, str]] = []
+    for item in links_payload:
+        if not isinstance(item, dict):
+            return [], {"links": "Ogni collegamento deve avere titolo e URL."}
+        label = str(item.get("label", "")).strip()
+        url = str(item.get("url", "")).strip()
+        if not label or not url:
+            return [], {"links": "Ogni collegamento deve includere titolo e URL."}
+        if not (url.startswith("http://") or url.startswith("https://")):
+            return [], {"links": "Ogni URL deve iniziare con http:// o https://."}
+        normalized_links.append({"label": label[:80], "url": url[:2048]})
+        if len(normalized_links) > 30:
+            return [], {"links": "Puoi salvare al massimo 30 collegamenti."}
+
+    return normalized_links, {}
 
 
 def get_school_countdown_target_date() -> str | None:

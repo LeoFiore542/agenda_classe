@@ -117,6 +117,26 @@
                 </div>
             </section>
 
+            <section class="panel compact-panel">
+                <div class="panel-heading">
+                    <h2>Collegamenti</h2>
+                    <p>Link utili della classe.</p>
+                </div>
+                <div id="useful-links-list" class="simple-events-list" aria-live="polite"></div>
+                {% if is_owner %}
+                <form id="useful-links-form" class="event-form simple-form">
+                    <label>
+                        Modifica collegamenti (uno per riga, formato: Titolo | https://link)
+                        <textarea id="useful-links-input" rows="5" placeholder="Registro elettronico | https://...&#10;Classroom | https://..."></textarea>
+                    </label>
+                    <div class="form-actions stacked-actions">
+                        <button type="submit" class="primary-button">Salva collegamenti</button>
+                        <p id="useful-links-feedback" class="form-feedback" aria-live="polite"></p>
+                    </div>
+                </form>
+                {% endif %}
+            </section>
+
             <aside class="side-column">
                 <section class="panel compact-panel">
                     <div class="panel-heading toolbar">
@@ -271,5 +291,6 @@
     <script id="class-roster-data" type="application/json">{{ class_roster|tojson }}</script>
     <script id="permissions-data" type="application/json">{{ (current_user.permissions if current_user else [])|tojson }}</script>
     <script id="current-user-data" type="application/json">{{ ({"username": current_user.username, "full_name": current_user.full_name} if current_user else {})|tojson }}</script>
+    <script id="owner-flag-data" type="application/json">{{ is_owner|tojson }}</script>
 </body>
 </html>

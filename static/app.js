@@ -15,6 +15,8 @@ const state = {
         full_name: "",
     },
     countdownRefreshTimeoutId: null,
+    usefulLinks: [],
+    isOwner: false,
     randomPicker: {
         intervalId: null,
         timeoutId: null,
@@ -86,12 +88,18 @@ const elements = {
     toggleMonthListSortButton: document.querySelector("#toggle-month-list-sort"),
     toggleInvolvedFilterButton: document.querySelector("#toggle-involved-filter"),
     currentUserData: document.querySelector("#current-user-data"),
+    ownerFlagData: document.querySelector("#owner-flag-data"),
+    usefulLinksList: document.querySelector("#useful-links-list"),
+    usefulLinksForm: document.querySelector("#useful-links-form"),
+    usefulLinksInput: document.querySelector("#useful-links-input"),
+    usefulLinksFeedback: document.querySelector("#useful-links-feedback"),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
     state.classRoster = parseClassRoster();
     state.permissions = parsePermissions();
     state.currentUser = parseCurrentUser();
+    state.isOwner = parseOwnerFlag();
     state.canEditEvents = state.permissions.includes("edit_events");
     state.canDeleteEvents = state.permissions.includes("delete_events");
     elements.form.event_type.value = "verifica";
@@ -102,6 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
     closeFormModal({ resetState: false });
     updateInterrogationFields();
     loadCountdown();
+    loadUsefulLinks();
     loadEvents();
 });
 
@@ -162,6 +171,9 @@ function bindEvents() {
 
     if (elements.countdownSettingsForm) {
         elements.countdownSettingsForm.addEventListener("submit", handleUpdateCountdownTarget);
+    }
+    if (elements.usefulLinksForm) {
+        elements.usefulLinksForm.addEventListener("submit", handleSaveUsefulLinks);
     }
     if (elements.toggleMonthListSortButton) {
         elements.toggleMonthListSortButton.addEventListener("click", () => {
@@ -244,6 +256,105 @@ function renderCountdown(payload) {
             elements.countdownTargetInput.value = "";
         }
     }
+}
+
+async function loadUsefulLinks() {
+    if (!elements.usefulLinksList) {
+        return;
+    }
+    const response = await fetch("/api/links");
+    if (!response.ok) {
+        elements.usefulLinksList.innerHTML = `
+            <div class="empty-state compact-empty-state">
+                <p>Impossibile caricare i collegamenti.</p>
+            </div>
+        `;
+        return;
+    }
+    const payload = await response.json();
+    state.usefulLinks = Array.isArray(payload.links) ? payload.links : [];
+    renderUsefulLinks();
+    if (state.isOwner && elements.usefulLinksInput) {
+        elements.usefulLinksInput.value = state.usefulLinks
+            .map((item) => `${item.label} | ${item.url}`)
+            .join("\n");
+    }
+}
+
+function renderUsefulLinks() {
+    if (!elements.usefulLinksList) {
+        return;
+    }
+    elements.usefulLinksList.innerHTML = "";
+    if (state.usefulLinks.length === 0) {
+        elements.usefulLinksList.innerHTML = `
+            <div class="empty-state compact-empty-state">
+                <p>Nessun collegamento disponibile.</p>
+            </div>
+        `;
+        return;
+    }
+    state.usefulLinks.forEach((item) => {
+        const row = document.createElement("article");
+        row.className = "simple-event-card";
+        const link = document.createElement("a");
+        link.href = item.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = item.label;
+        row.appendChild(link);
+        elements.usefulLinksList.appendChild(row);
+    });
+}
+
+async function handleSaveUsefulLinks(event) {
+    event.preventDefault();
+    if (!elements.usefulLinksInput || !elements.usefulLinksFeedback) {
+        return;
+    }
+    const parsedLinks = parseUsefulLinksInput(elements.usefulLinksInput.value);
+    if (!parsedLinks.ok) {
+        elements.usefulLinksFeedback.textContent = parsedLinks.error;
+        return;
+    }
+    elements.usefulLinksFeedback.textContent = "Salvataggio collegamenti in corso...";
+    const response = await fetch("/api/links", {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ links: parsedLinks.links }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+        elements.usefulLinksFeedback.textContent = payload.error || payload.errors?.links || "Impossibile salvare i collegamenti.";
+        return;
+    }
+    state.usefulLinks = Array.isArray(payload.links) ? payload.links : [];
+    renderUsefulLinks();
+    elements.usefulLinksInput.value = state.usefulLinks.map((item) => `${item.label} | ${item.url}`).join("\n");
+    elements.usefulLinksFeedback.textContent = "Collegamenti aggiornati.";
+}
+
+function parseUsefulLinksInput(rawValue) {
+    const lines = String(rawValue || "")
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const links = [];
+    for (const line of lines) {
+        const separatorIndex = line.indexOf("|");
+        if (separatorIndex <= 0) {
+            return { ok: false, error: "Usa il formato: Titolo | https://link" };
+        }
+        const label = line.slice(0, separatorIndex).trim();
+        const url = line.slice(separatorIndex + 1).trim();
+        if (!label || !url) {
+            return { ok: false, error: "Ogni riga deve contenere titolo e URL." };
+        }
+        links.push({ label, url });
+    }
+    return { ok: true, links };
 }
 
 async function handleUpdateCountdownTarget(event) {
@@ -732,6 +843,18 @@ function parseCurrentUser() {
         };
     } catch (error) {
         return { username: "", full_name: "" };
+    }
+}
+
+function parseOwnerFlag() {
+    const rawValue = elements.ownerFlagData?.textContent?.trim();
+    if (!rawValue) {
+        return false;
+    }
+    try {
+        return Boolean(JSON.parse(rawValue));
+    } catch (error) {
+        return false;
     }
 }
 
