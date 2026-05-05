@@ -250,6 +250,20 @@
                 </div>
             </section>
         </div>
+
+        <div id="mobile-day-modal" class="modal-shell" hidden>
+            <div id="mobile-day-backdrop" class="modal-backdrop"></div>
+            <section class="panel modal-panel mobile-day-panel" role="dialog" aria-modal="true" aria-labelledby="mobile-day-title">
+                <div class="panel-heading modal-heading">
+                    <div>
+                        <h2 id="mobile-day-title">Impegni del giorno</h2>
+                        <p id="mobile-day-subtitle"></p>
+                    </div>
+                    <button id="mobile-day-close" class="icon-button" type="button" aria-label="Chiudi elenco giorno">×</button>
+                </div>
+                <div id="mobile-day-list" class="mobile-day-list"></div>
+            </section>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>

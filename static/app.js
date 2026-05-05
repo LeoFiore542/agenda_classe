@@ -56,6 +56,12 @@ const elements = {
     readOnlyEventSubtitle: document.querySelector("#readonly-event-subtitle"),
     readOnlyEventNotes: document.querySelector("#readonly-event-notes"),
     readOnlyEventSchedule: document.querySelector("#readonly-event-schedule"),
+    mobileDayModal: document.querySelector("#mobile-day-modal"),
+    mobileDayBackdrop: document.querySelector("#mobile-day-backdrop"),
+    mobileDayCloseButton: document.querySelector("#mobile-day-close"),
+    mobileDayTitle: document.querySelector("#mobile-day-title"),
+    mobileDaySubtitle: document.querySelector("#mobile-day-subtitle"),
+    mobileDayList: document.querySelector("#mobile-day-list"),
     subjectTextField: document.querySelector("#subject-text-field"),
     subjectInput: document.querySelector("#subject-input"),
     eventSubjectField: document.querySelector("#event-subject-field"),
@@ -116,6 +122,12 @@ function bindEvents() {
     if (elements.readOnlyEventBackdrop) {
         elements.readOnlyEventBackdrop.addEventListener("click", () => closeReadOnlyEventModal());
     }
+    if (elements.mobileDayCloseButton) {
+        elements.mobileDayCloseButton.addEventListener("click", () => closeMobileDayModal());
+    }
+    if (elements.mobileDayBackdrop) {
+        elements.mobileDayBackdrop.addEventListener("click", () => closeMobileDayModal());
+    }
     elements.form.scheduled_for.addEventListener("change", (event) => {
         const previousMonth = state.displayedMonth;
         selectDate(event.target.value);
@@ -139,6 +151,8 @@ function bindEvents() {
             closeRandomPickerModal();
         } else if (event.key === "Escape" && elements.readOnlyEventModal && !elements.readOnlyEventModal.hidden) {
             closeReadOnlyEventModal();
+        } else if (event.key === "Escape" && elements.mobileDayModal && !elements.mobileDayModal.hidden) {
+            closeMobileDayModal();
         } else if (event.key === "Escape" && !elements.formModal.hidden) {
             closeFormModal();
         }
@@ -364,12 +378,18 @@ function renderCalendar() {
         dayCard.addEventListener("click", () => {
             selectDate(dateValue);
             renderCalendar();
+            if (isMobileLayout()) {
+                openMobileDayModal(dateValue, items);
+            }
         });
         dayCard.addEventListener("keydown", (event) => {
             if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 selectDate(dateValue);
                 renderCalendar();
+                if (isMobileLayout()) {
+                    openMobileDayModal(dateValue, items);
+                }
             }
         });
 
@@ -796,6 +816,57 @@ function closeReadOnlyEventModal() {
     if (elements.readOnlyEventSchedule) {
         elements.readOnlyEventSchedule.innerHTML = "";
     }
+}
+
+function openMobileDayModal(dateValue, dayOccurrences) {
+    if (!elements.mobileDayModal || !elements.mobileDayList || !elements.mobileDaySubtitle) {
+        return;
+    }
+
+    elements.mobileDayTitle.textContent = "Impegni del giorno";
+    elements.mobileDaySubtitle.textContent = formatLongDate(dateValue);
+    elements.mobileDayList.innerHTML = "";
+
+    if (!dayOccurrences || dayOccurrences.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "field-help";
+        empty.textContent = "Nessun impegno in questa giornata.";
+        elements.mobileDayList.appendChild(empty);
+    } else {
+        dayOccurrences.forEach((eventOccurrence) => {
+            const event = eventOccurrence.sourceEvent;
+            const row = document.createElement("article");
+            row.className = "mobile-day-item";
+
+            const title = document.createElement("p");
+            title.className = "mobile-day-item-title";
+            title.textContent = event.subject;
+            row.appendChild(title);
+
+            if (event.event_type === "interrogazione") {
+                const students = getInterrogationStudentsForDate(event, dateValue);
+                const details = document.createElement("p");
+                details.className = "mobile-day-item-meta";
+                details.textContent = students.length > 0
+                    ? `Interrogati: ${students.join(", ")}`
+                    : "Interrogati: nessuno indicato";
+                row.appendChild(details);
+            }
+
+            elements.mobileDayList.appendChild(row);
+        });
+    }
+
+    elements.mobileDayModal.hidden = false;
+    elements.mobileDayModal.classList.add("is-open");
+}
+
+function closeMobileDayModal() {
+    if (!elements.mobileDayModal) {
+        return;
+    }
+    elements.mobileDayModal.classList.remove("is-open");
+    elements.mobileDayModal.hidden = true;
 }
 
 function renderReadOnlyScheduleRows(rows, focusedDate = "") {
@@ -1233,6 +1304,12 @@ function buildInterrogationScheduleRows(event) {
     ];
 }
 
+function getInterrogationStudentsForDate(event, dateValue) {
+    const rows = buildInterrogationScheduleRows(event);
+    const row = rows.find((item) => item.date === dateValue);
+    return row ? row.students : [];
+}
+
 function parseClassRoster() {
     try {
         const parsed = JSON.parse(elements.classRosterData.textContent || "[]");
@@ -1406,4 +1483,8 @@ function getMonthString(value) {
 
 function getDateString(value) {
     return `${getMonthString(value)}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+function isMobileLayout() {
+    return window.matchMedia("(max-width: 760px)").matches;
 }
