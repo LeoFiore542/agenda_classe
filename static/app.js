@@ -9,6 +9,7 @@ const state = {
     canEditEvents: false,
     canDeleteEvents: false,
     highlightPersonalEvents: false,
+    monthListSortMode: "chronological",
     currentUser: {
         username: "",
         full_name: "",
@@ -82,6 +83,7 @@ const elements = {
     countdownTargetLabel: document.querySelector("#countdown-target-label"),
     countdownSettingsForm: document.querySelector("#countdown-settings-form"),
     countdownTargetInput: document.querySelector("#countdown-target-input"),
+    toggleMonthListSortButton: document.querySelector("#toggle-month-list-sort"),
     toggleInvolvedFilterButton: document.querySelector("#toggle-involved-filter"),
     currentUserData: document.querySelector("#current-user-data"),
 };
@@ -160,6 +162,14 @@ function bindEvents() {
 
     if (elements.countdownSettingsForm) {
         elements.countdownSettingsForm.addEventListener("submit", handleUpdateCountdownTarget);
+    }
+    if (elements.toggleMonthListSortButton) {
+        elements.toggleMonthListSortButton.addEventListener("click", () => {
+            state.monthListSortMode = state.monthListSortMode === "chronological" ? "type" : "chronological";
+            updateMonthListSortButton();
+            renderEventList();
+        });
+        updateMonthListSortButton();
     }
     if (elements.toggleInvolvedFilterButton) {
         elements.toggleInvolvedFilterButton.addEventListener("click", () => {
@@ -488,7 +498,7 @@ function renderEventList() {
         return;
     }
 
-    state.events.forEach((event) => {
+    getSortedEventsForList().forEach((event) => {
         const article = document.createElement("article");
         article.className = "simple-event-card";
         article.classList.add(getEventTypeClassName(event.event_type));
@@ -732,6 +742,15 @@ function updateInvolvedFilterButton() {
     elements.toggleInvolvedFilterButton.textContent = state.highlightPersonalEvents
         ? "Disattiva evidenza personale"
         : "Evidenzia i miei impegni";
+}
+
+function updateMonthListSortButton() {
+    if (!elements.toggleMonthListSortButton) {
+        return;
+    }
+    elements.toggleMonthListSortButton.textContent = state.monthListSortMode === "chronological"
+        ? "Ordine: cronologico"
+        : "Ordine: tipologia";
 }
 
 function isDateInFutureOrToday(value) {
@@ -1308,6 +1327,30 @@ function getInterrogationStudentsForDate(event, dateValue) {
     const rows = buildInterrogationScheduleRows(event);
     const row = rows.find((item) => item.date === dateValue);
     return row ? row.students : [];
+}
+
+function getSortedEventsForList() {
+    const items = [...state.events];
+    if (state.monthListSortMode === "type") {
+        const typeOrder = {
+            verifica: 0,
+            interrogazione: 1,
+            evento: 2,
+        };
+        items.sort((left, right) => {
+            const leftType = typeOrder[left.event_type] ?? 99;
+            const rightType = typeOrder[right.event_type] ?? 99;
+            if (leftType !== rightType) {
+                return leftType - rightType;
+            }
+            const byDate = String(left.scheduled_for).localeCompare(String(right.scheduled_for));
+            if (byDate !== 0) {
+                return byDate;
+            }
+            return String(left.subject).localeCompare(String(right.subject));
+        });
+    }
+    return items;
 }
 
 function parseClassRoster() {
