@@ -6,6 +6,7 @@ import os
 import signal
 import sqlite3
 import subprocess
+import threading
 import time
 import unicodedata
 from datetime import date, datetime
@@ -166,13 +167,17 @@ def create_app(test_config: dict | None = None) -> Flask:
             app.config["DATABASE"] = "/tmp/school_planner.db"
 
     _db_ready = False
+    _db_init_lock = threading.Lock()
 
     @app.before_request
     def ensure_db_initialized() -> None:
         nonlocal _db_ready
-        if not _db_ready:
-            init_db()
-            _db_ready = True
+        if _db_ready:
+            return
+        with _db_init_lock:
+            if not _db_ready:
+                init_db()
+                _db_ready = True
 
     @app.before_request
     def load_current_user() -> None:
