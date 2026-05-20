@@ -274,6 +274,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         return render_template(
             "account.html",
             personal_schedule=build_personal_schedule(g.current_user["full_name"]),
+            is_owner=is_current_user_owner(),
         )
 
     @app.route("/")
@@ -510,6 +511,30 @@ def create_app(test_config: dict | None = None) -> Flask:
     @permission_required("manage_role_assignments")
     def list_users_with_roles():
         return jsonify(fetch_users_with_roles())
+
+    @app.get("/api/users/credentials")
+    @login_required
+    @password_change_not_required
+    def list_users_credentials():
+        if not is_current_user_owner():
+            return jsonify({"error": "Solo l'owner puo accedere alle credenziali degli utenti."}), 403
+        return jsonify(fetch_users_credentials())
+
+    @app.put("/api/users/<int:user_id>/credentials")
+    @login_required
+    @password_change_not_required
+    def update_user_credentials(user_id: int):
+        if not is_current_user_owner():
+            return jsonify({"error": "Solo l'owner puo modificare le credenziali."}), 403
+
+        payload = request.get_json(silent=True) or {}
+        updated_user, errors = apply_user_credentials_update(user_id, payload)
+        if errors:
+            status_code = 404 if errors.get("error") == "Utente non trovato." else 400
+            return jsonify(errors), status_code
+
+        get_db().commit()
+        return jsonify(updated_user)
 
     @app.put("/api/users/<int:user_id>/roles")
     @login_required
@@ -887,6 +912,102 @@ def fetch_all_roles_with_permissions() -> list[dict[str, object]]:
             }
         )
     return roles_payload
+
+
+def fetch_users_credentials() -> list[dict[str, object]]:
+    rows = get_db().execute(
+        """
+        SELECT id, username, full_name, must_change_password
+        FROM users
+        ORDER BY full_name ASC
+        """
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "username": row["username"],
+            "full_name": row["full_name"],
+            "must_change_password": bool(row["must_change_password"]),
+        }
+        for row in rows
+    ]
+
+
+def apply_user_credentials_update(
+    user_id: int, payload: dict[str, object]
+) -> tuple[dict[str, object] | None, dict[str, str]]:
+    database = get_db()
+    user_row = database.execute(
+        "SELECT id, username FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    if user_row is None:
+        return None, {"error": "Utente non trovato."}
+
+    errors: dict[str, str] = {}
+    current_username = str(user_row["username"])
+    username = str(payload.get("username", "")).strip().lower()
+    new_password = str(payload.get("new_password", ""))
+    must_change_password = payload.get("must_change_password")
+
+    update_fields: list[str] = []
+    update_values: list[object] = []
+
+    if username and username != current_username:
+        if current_username in {OWNER_USERNAME, LEGACY_OWNER_USERNAME}:
+            errors["username"] = "Non puoi modificare lo username dell'account owner."
+        elif not all(character.isalnum() or character == "." for character in username):
+            errors["username"] = "Lo username puo contenere solo lettere, numeri e punti."
+        else:
+            existing = database.execute(
+                "SELECT id FROM users WHERE username = ? AND id != ?",
+                (username, user_id),
+            ).fetchone()
+            if existing is not None:
+                errors["username"] = "Username gia in uso."
+            else:
+                update_fields.append("username = ?")
+                update_values.append(username)
+
+    if new_password:
+        if len(new_password) < 6:
+            errors["new_password"] = "La password deve contenere almeno 6 caratteri."
+        else:
+            update_fields.append("password_hash = ?")
+            update_values.append(generate_password_hash(new_password, method="pbkdf2:sha256"))
+
+    if must_change_password is not None:
+        update_fields.append("must_change_password = ?")
+        update_values.append(1 if bool(must_change_password) else 0)
+
+    if errors:
+        return None, errors
+
+    if not update_fields:
+        return None, {"error": "Nessuna modifica da salvare."}
+
+    update_values.append(user_id)
+    database.execute(
+        f"UPDATE users SET {', '.join(update_fields)} WHERE id = ?",
+        tuple(update_values),
+    )
+
+    refreshed_row = database.execute(
+        "SELECT id, username, full_name, must_change_password FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    if refreshed_row is None:
+        return None, {"error": "Impossibile leggere l'utente aggiornato."}
+
+    return (
+        {
+            "id": refreshed_row["id"],
+            "username": refreshed_row["username"],
+            "full_name": refreshed_row["full_name"],
+            "must_change_password": bool(refreshed_row["must_change_password"]),
+        },
+        {},
+    )
 
 
 def fetch_users_with_roles() -> list[dict[str, object]]:

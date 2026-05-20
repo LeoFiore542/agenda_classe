@@ -120,6 +120,23 @@
         </section>
         {% endif %}
 
+        {% if is_owner and not current_user.must_change_password %}
+        <section class="panel credentials-management-panel" id="credentials-management-panel">
+            <div class="panel-heading password-panel-heading">
+                <div>
+                    <p class="eyebrow">Gestione accessi</p>
+                    <h2>Credenziali utenti</h2>
+                    <p>
+                        Modifica username, password e obbligo di cambio password al primo accesso per ogni account.
+                    </p>
+                </div>
+            </div>
+
+            <p class="credentials-feedback" id="credentials-feedback" aria-live="polite"></p>
+            <div class="credentials-list" id="credentials-list"></div>
+        </section>
+        {% endif %}
+
         {% if current_user and not current_user.must_change_password and 'manage_role_assignments' in current_user.permissions %}
         <section class="panel roles-management-panel" id="roles-management-panel">
             <div class="panel-heading password-panel-heading">
@@ -138,7 +155,7 @@
         {% endif %}
     </div>
 
-    {% if current_user and not current_user.must_change_password and 'manage_role_assignments' in current_user.permissions %}
+    {% if current_user and not current_user.must_change_password and (is_owner or 'manage_role_assignments' in current_user.permissions) %}
     <script src="{{ url_for('static', filename='account.js') }}"></script>
     {% endif %}
     <script src="{{ url_for('static', filename='password-toggle.js') }}" defer></script>

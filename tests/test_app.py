@@ -338,6 +338,64 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(owner_login.status_code, 302)
         self.assertEqual(owner_login.headers["Location"], "/account")
 
+    def test_owner_can_update_user_credentials(self):
+        self.client.post(
+            "/login",
+            data={"username": "fiorini.leonardo", "password": "fiorini.leonardo"},
+            follow_redirects=False,
+        )
+        self.client.post(
+            "/account/password",
+            data={
+                "current_password": "fiorini.leonardo",
+                "new_password": "owner-secure-pass",
+                "confirm_password": "owner-secure-pass",
+            },
+            follow_redirects=False,
+        )
+
+        target_username = build_username_from_full_name("Abruzzese Elisa")
+        with self.app.app_context():
+            init_db()
+            database = self.app.view_functions["login"].__globals__["get_db"]()
+            target_user = database.execute(
+                "SELECT id FROM users WHERE username = ?",
+                (target_username,),
+            ).fetchone()
+        self.assertIsNotNone(target_user)
+
+        self.client.post("/logout", follow_redirects=False)
+        self.login_and_change_password(full_name="Abruzzese Elisa", new_password="studente-pass")
+        forbidden_response = self.client.get("/api/users/credentials")
+        self.assertEqual(forbidden_response.status_code, 403)
+        self.client.post("/logout", follow_redirects=False)
+
+        self.client.post(
+            "/login",
+            data={"username": "fiorini.leonardo", "password": "owner-secure-pass"},
+            follow_redirects=False,
+        )
+        update_response = self.client.put(
+            f"/api/users/{target_user['id']}/credentials",
+            json={
+                "username": target_username,
+                "new_password": "nuova-pass-admin",
+                "must_change_password": True,
+            },
+        )
+        self.assertEqual(update_response.status_code, 200)
+        payload = update_response.get_json()
+        self.assertTrue(payload["must_change_password"])
+
+        self.client.post("/logout", follow_redirects=False)
+        login_response = self.client.post(
+            "/login",
+            data={"username": target_username, "password": "nuova-pass-admin"},
+            follow_redirects=False,
+        )
+        self.assertEqual(login_response.status_code, 302)
+        self.assertEqual(login_response.headers["Location"], "/account")
+
 
 if __name__ == "__main__":
     unittest.main()

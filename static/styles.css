@@ -148,8 +148,73 @@ textarea {
     margin-bottom: 22px;
 }
 
-.roles-management-panel {
+.roles-management-panel,
+.credentials-management-panel {
     margin-bottom: 22px;
+}
+
+.credentials-feedback {
+    margin: 0 0 14px;
+    min-height: 1.4rem;
+    font-weight: 600;
+}
+
+.credentials-feedback.is-success {
+    color: #0f6059;
+}
+
+.credentials-feedback.is-error {
+    color: #9c4a23;
+}
+
+.credentials-feedback.is-info {
+    color: var(--muted);
+}
+
+.credentials-list {
+    display: grid;
+    gap: 14px;
+}
+
+.credentials-empty {
+    margin: 0;
+    color: var(--muted);
+}
+
+.credential-user-card {
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.8);
+}
+
+.credential-user-header h3 {
+    margin: 0 0 12px;
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.1rem;
+}
+
+.credentials-form {
+    display: grid;
+    gap: 12px;
+}
+
+.credentials-form label {
+    display: grid;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.credential-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.credential-save-button {
+    justify-self: start;
 }
 
 .roles-feedback {
@@ -1066,8 +1131,13 @@ textarea {
         grid-template-columns: 1fr;
     }
 
-    .role-save-button {
+    .role-save-button,
+    .credential-save-button {
         justify-self: stretch;
+    }
+
+    .credentials-form {
+        grid-template-columns: 1fr;
     }
 
     .month-actions {
