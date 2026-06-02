@@ -46,20 +46,17 @@ COUNTDOWN_TARGET_DATE_KEY = "school_countdown_target_date"
 USEFUL_LINKS_KEY = "useful_links"
 SCHOOL_HOURS_PER_DAY = 6
 
-ROLE_PERMISSIONS: dict[str, set[str]] = {
-    "owner": {
-        "manage_roles",
-        "manage_role_assignments",
-        "create_roles",
-        "create_events",
-        "edit_events",
-        "delete_events",
-        "view_events",
-        "manage_countdown_target",
-    },
-    "rappresentante": {"create_events", "edit_events", "delete_events", "view_events"},
-    "editor": {"edit_events", "view_events"},
-    "alunno": {"view_events"},
+STUDENT_PERMISSIONS = {"view_events"}
+REPRESENTATIVE_PERMISSIONS = {"create_events", "edit_events", "delete_events", "view_events"}
+OWNER_PERMISSIONS = {
+    "manage_roles",
+    "manage_role_assignments",
+    "create_roles",
+    "create_events",
+    "edit_events",
+    "delete_events",
+    "view_events",
+    "manage_countdown_target",
 }
 
 
@@ -268,12 +265,68 @@ def create_app(test_config: dict | None = None) -> Flask:
         flash("Password aggiornata correttamente.", "success")
         return redirect(url_for("index"))
 
+    @app.get("/signup")
+    def signup_page() -> str:
+        if g.get("current_user") is not None:
+            if g.current_user.get("must_change_password"):
+                return redirect(url_for("account"))
+            return redirect(url_for("index"))
+        return render_template("signup.html", error_message="")
+
+    @app.post("/signup")
+    def signup():
+        if g.get("current_user") is not None:
+            if g.current_user.get("must_change_password"):
+                return redirect(url_for("account"))
+            return redirect(url_for("index"))
+
+        email = str(request.form.get("email", "")).strip().lower()
+        username = str(request.form.get("username", "")).strip().lower()
+        password = str(request.form.get("password", ""))
+        class_group = str(request.form.get("class_group", "")).strip().upper()
+        is_representative = request.form.get("is_representative") == "on"
+
+        error_message = validate_signup_payload(email, username, password, class_group)
+        if error_message:
+            return render_template("signup.html", error_message=error_message), 400
+
+        database = get_db()
+        existing = database.execute(
+            "SELECT id FROM users WHERE username = ? OR email = ?",
+            (username, email),
+        ).fetchone()
+        if existing is not None:
+            return render_template("signup.html", error_message="Username o email gia registrati."), 409
+
+        database.execute(
+            """
+            INSERT INTO users (full_name, email, username, password_hash, class_group, is_representative, is_owner, must_change_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                username,
+                email,
+                username,
+                generate_password_hash(password, method="pbkdf2:sha256"),
+                class_group,
+                1 if is_representative else 0,
+                0,
+                0,
+            ),
+        )
+        database.commit()
+        flash("Account creato con successo. Ora puoi fare login.", "success")
+        return redirect(url_for("login"))
+
     @app.get("/account")
     @login_required
     def account() -> str:
         return render_template(
             "account.html",
-            personal_schedule=build_personal_schedule(g.current_user["full_name"]),
+            personal_schedule=build_personal_schedule(
+                g.current_user["full_name"],
+                str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)),
+            ),
             is_owner=is_current_user_owner(),
         )
 
@@ -284,7 +337,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         return render_template(
             "index.html",
             today=date.today().isoformat(),
-            class_group=DEFAULT_CLASS_GROUP,
+            class_group=str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)),
             class_roster=read_class_roster(),
             is_owner=is_current_user_owner(),
         )
@@ -298,7 +351,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             "month": request.args.get("month", "").strip(),
             "subject": request.args.get("subject", "").strip(),
         }
-        rows = fetch_events(filters)
+        rows = fetch_events(filters, str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)))
         return jsonify(rows)
 
     @app.post("/api/events")
@@ -308,6 +361,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     def create_event():
         payload = request.get_json(silent=True) or {}
         payload["created_by"] = g.current_user["full_name"]
+        payload["class_group"] = str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP))
         cleaned, errors = validate_event_payload(payload)
         if errors:
             return jsonify({"errors": errors}), 400
@@ -354,7 +408,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         if event_id is None:
             return jsonify({"error": "Impossibile creare l'evento."}), 500
 
-        event = fetch_event_by_id(event_id)
+        event = fetch_event_by_id(event_id, str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)))
         if event is None:
             return jsonify({"error": "Impossibile recuperare l'evento creato."}), 500
 
@@ -365,12 +419,13 @@ def create_app(test_config: dict | None = None) -> Flask:
     @password_change_not_required
     @permission_required("edit_events")
     def update_event(event_id: int):
-        existing = fetch_event_by_id(event_id)
+        existing = fetch_event_by_id(event_id, str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)))
         if existing is None:
             return jsonify({"error": "Evento non trovato."}), 404
 
         payload = request.get_json(silent=True) or {}
         merged = {**existing, **payload, "created_by": existing.get("created_by") or g.current_user["full_name"]}
+        merged["class_group"] = str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP))
         cleaned, errors = validate_event_payload(merged)
         if errors:
             return jsonify({"errors": errors}), 400
@@ -403,7 +458,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             ),
         )
         database.commit()
-        return jsonify(fetch_event_by_id(event_id))
+        return jsonify(fetch_event_by_id(event_id, str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP))))
 
     @app.delete("/api/events/<int:event_id>")
     @login_required
@@ -411,7 +466,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     @permission_required("delete_events")
     def delete_event(event_id: int):
         database = get_db()
-        cursor = database.execute("DELETE FROM events WHERE id = ?", (event_id,))
+        cursor = database.execute(
+            "DELETE FROM events WHERE id = ? AND class_group = ?",
+            (event_id, str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP))),
+        )
         database.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Evento non trovato."}), 404
@@ -636,6 +694,18 @@ def normalize_next_url(value: str | None) -> str:
     return url_for("index")
 
 
+def validate_signup_payload(email: str, username: str, password: str, class_group: str) -> str:
+    if "@" not in email or "." not in email.split("@")[-1]:
+        return "Inserisci una email valida."
+    if len(username) < 3 or not all(character.isalnum() or character in {".", "_", "-"} for character in username):
+        return "Lo username deve avere almeno 3 caratteri e puo contenere lettere, numeri, punto, trattino o underscore."
+    if len(password) < 6:
+        return "La password deve contenere almeno 6 caratteri."
+    if len(class_group) < 1 or len(class_group) > 20:
+        return "Inserisci una classe valida."
+    return ""
+
+
 def build_username_from_full_name(full_name: str, taken_usernames: set[str] | None = None) -> str:
     ascii_value = unicodedata.normalize("NFKD", full_name).encode("ascii", "ignore").decode("ascii").lower()
     parts = ["".join(character for character in chunk if character.isalnum()) for chunk in ascii_value.split()]
@@ -660,51 +730,11 @@ def build_username_from_full_name(full_name: str, taken_usernames: set[str] | No
 
 
 def seed_user_accounts(database: DatabaseAdapter) -> None:
-    existing_rows = database.execute("SELECT full_name, username FROM users").fetchall()
-    existing_names = {row["full_name"] for row in existing_rows}
-    taken_usernames = {row["username"] for row in existing_rows}
-
-    for full_name in read_class_roster():
-        if full_name in existing_names:
-            continue
-
-        username = build_username_from_full_name(full_name, taken_usernames)
-        database.execute(
-            "INSERT INTO users (full_name, username, password_hash, must_change_password) VALUES (?, ?, ?, ?)",
-            (full_name, username, generate_password_hash(username, method="pbkdf2:sha256"), 1),
-        )
-        existing_names.add(full_name)
-        taken_usernames.add(username)
+    return
 
 
 def seed_roles_and_permissions(database: DatabaseAdapter) -> None:
-    role_rows = database.execute("SELECT id, name FROM roles").fetchall()
-    role_by_name = {row["name"]: row["id"] for row in role_rows}
-
-    for role_name in ROLE_PERMISSIONS:
-        if role_name in role_by_name:
-            continue
-        database.execute("INSERT INTO roles (name) VALUES (?)", (role_name,))
-
-    role_rows = database.execute("SELECT id, name FROM roles").fetchall()
-    role_by_name = {row["name"]: row["id"] for row in role_rows}
-
-    for role_name, permissions in ROLE_PERMISSIONS.items():
-        role_id = role_by_name[role_name]
-        existing_permissions = {
-            row["permission"]
-            for row in database.execute(
-                "SELECT permission FROM role_permissions WHERE role_id = ?",
-                (role_id,),
-            ).fetchall()
-        }
-        for permission_name in permissions:
-            if permission_name in existing_permissions:
-                continue
-            database.execute(
-                "INSERT INTO role_permissions (role_id, permission) VALUES (?, ?)",
-                (role_id, permission_name),
-            )
+    return
 
 
 def ensure_owner_account(database: DatabaseAdapter) -> None:
@@ -720,11 +750,10 @@ def ensure_owner_account(database: DatabaseAdapter) -> None:
 
         if legacy_row is not None and target_row is None:
             database.execute(
-                "UPDATE users SET username = ?, full_name = ? WHERE id = ?",
+                "UPDATE users SET username = ?, full_name = ?, is_owner = 1 WHERE id = ?",
                 (OWNER_USERNAME, OWNER_FULL_NAME, legacy_row["id"]),
             )
         elif legacy_row is not None and target_row is not None:
-            database.execute("DELETE FROM user_roles WHERE user_id = ?", (legacy_row["id"],))
             database.execute("DELETE FROM users WHERE id = ?", (legacy_row["id"],))
 
     owner_row = database.execute(
@@ -734,11 +763,18 @@ def ensure_owner_account(database: DatabaseAdapter) -> None:
 
     if owner_row is None:
         database.execute(
-            "INSERT INTO users (full_name, username, password_hash, must_change_password) VALUES (?, ?, ?, ?)",
+            """
+            INSERT INTO users (full_name, email, username, password_hash, class_group, is_representative, is_owner, must_change_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 OWNER_FULL_NAME,
+                "owner@agenda.local",
                 OWNER_USERNAME,
                 generate_password_hash(OWNER_USERNAME, method="pbkdf2:sha256"),
+                DEFAULT_CLASS_GROUP,
+                1,
+                1,
                 1,
             ),
         )
@@ -748,7 +784,10 @@ def ensure_owner_account(database: DatabaseAdapter) -> None:
         ).fetchone()
 
     if owner_row is not None:
-        assign_role_to_user(database, owner_row["id"], "owner")
+        database.execute(
+            "UPDATE users SET is_owner = 1, is_representative = 1, class_group = ? WHERE id = ?",
+            (DEFAULT_CLASS_GROUP, owner_row["id"]),
+        )
 
 
 def assign_role_to_user(database: DatabaseAdapter, user_id: int, role_name: str) -> None:
@@ -770,17 +809,7 @@ def assign_role_to_user(database: DatabaseAdapter, user_id: int, role_name: str)
 
 
 def ensure_default_user_roles(database: DatabaseAdapter) -> None:
-    users_without_roles = database.execute(
-        """
-        SELECT u.id
-        FROM users u
-        LEFT JOIN user_roles ur ON ur.user_id = u.id
-        WHERE ur.user_id IS NULL
-        """
-    ).fetchall()
-
-    for row in users_without_roles:
-        assign_role_to_user(database, row["id"], "rappresentante")
+    return
 
 
 def run_credential_reset_once(database: DatabaseAdapter) -> None:
@@ -824,6 +853,10 @@ def ensure_users_columns(database: DatabaseAdapter) -> None:
     }
     required_columns = {
         "must_change_password": "INTEGER NOT NULL DEFAULT 1",
+        "email": "TEXT NOT NULL DEFAULT ''",
+        "class_group": f"TEXT NOT NULL DEFAULT '{DEFAULT_CLASS_GROUP}'",
+        "is_representative": "INTEGER NOT NULL DEFAULT 0",
+        "is_owner": "INTEGER NOT NULL DEFAULT 0",
     }
 
     for column_name, column_definition in required_columns.items():
@@ -838,28 +871,34 @@ def fetch_user_by_id(user_id: int | None) -> dict | None:
         return None
 
     row = get_db().execute(
-        "SELECT id, full_name, username, password_hash, must_change_password, created_at FROM users WHERE id = ?",
+        """
+        SELECT id, full_name, email, username, password_hash, class_group, is_representative, is_owner, must_change_password, created_at
+        FROM users WHERE id = ?
+        """,
         (user_id,),
     ).fetchone()
     if row is None:
         return None
 
     user = dict(row)
-    user["roles"] = fetch_role_names_for_user(user["id"])
+    user["roles"] = ["owner"] if user.get("is_owner") else (["rappresentante"] if user.get("is_representative") else ["studente"])
     user["permissions"] = fetch_permissions_for_user(user["id"])
     return user
 
 
 def fetch_user_by_username(username: str) -> dict | None:
     row = get_db().execute(
-        "SELECT id, full_name, username, password_hash, must_change_password, created_at FROM users WHERE username = ?",
+        """
+        SELECT id, full_name, email, username, password_hash, class_group, is_representative, is_owner, must_change_password, created_at
+        FROM users WHERE username = ?
+        """,
         (username,),
     ).fetchone()
     if row is None:
         return None
 
     user = dict(row)
-    user["roles"] = fetch_role_names_for_user(user["id"])
+    user["roles"] = ["owner"] if user.get("is_owner") else (["rappresentante"] if user.get("is_representative") else ["studente"])
     user["permissions"] = fetch_permissions_for_user(user["id"])
     return user
 
@@ -883,17 +922,17 @@ def fetch_role_names_for_user(user_id: int) -> list[str]:
 
 
 def fetch_permissions_for_user(user_id: int) -> list[str]:
-    rows = get_db().execute(
-        """
-        SELECT DISTINCT rp.permission
-        FROM role_permissions rp
-        JOIN user_roles ur ON ur.role_id = rp.role_id
-        WHERE ur.user_id = ?
-        ORDER BY rp.permission ASC
-        """,
+    row = get_db().execute(
+        "SELECT is_owner, is_representative FROM users WHERE id = ?",
         (user_id,),
-    ).fetchall()
-    return [row["permission"] for row in rows]
+    ).fetchone()
+    if row is None:
+        return []
+    if int(row["is_owner"]) == 1:
+        return sorted(OWNER_PERMISSIONS)
+    if int(row["is_representative"]) == 1:
+        return sorted(REPRESENTATIVE_PERMISSIONS)
+    return sorted(STUDENT_PERMISSIONS)
 
 
 def fetch_all_roles_with_permissions() -> list[dict[str, object]]:
@@ -1031,8 +1070,10 @@ def is_current_user_owner() -> bool:
     current_user = g.get("current_user")
     if not current_user:
         return False
-    username = str(current_user.get("username", "")).strip().lower()
-    return username in {OWNER_USERNAME, LEGACY_OWNER_USERNAME}
+    return bool(current_user.get("is_owner")) or str(current_user.get("username", "")).strip().lower() in {
+        OWNER_USERNAME,
+        LEGACY_OWNER_USERNAME,
+    }
 
 
 def get_app_setting(key: str) -> str | None:
@@ -1242,7 +1283,7 @@ def ensure_events_columns(database: DatabaseAdapter) -> None:
             )
 
 
-def fetch_events(filters: dict[str, str]) -> list[dict]:
+def fetch_events(filters: dict[str, str], class_group: str) -> list[dict]:
     query = """
         SELECT id, title, subject, event_type, class_group, scheduled_for,
                interrogation_mode, interrogation_end, interrogation_dates,
@@ -1288,14 +1329,14 @@ def fetch_events(filters: dict[str, str]) -> list[dict]:
         params.append(f"%{subject.lower()}%")
 
     query += " AND class_group = ?"
-    params.append(DEFAULT_CLASS_GROUP)
+    params.append(class_group or DEFAULT_CLASS_GROUP)
 
     query += " ORDER BY scheduled_for ASC, subject ASC, created_at ASC"
     rows = get_db().execute(query, params).fetchall()
     return [dict(row) for row in rows]
 
 
-def fetch_all_events() -> list[dict]:
+def fetch_all_events(class_group: str) -> list[dict]:
     rows = get_db().execute(
         """
         SELECT id, title, subject, event_type, class_group, scheduled_for,
@@ -1306,15 +1347,15 @@ def fetch_all_events() -> list[dict]:
         WHERE class_group = ?
         ORDER BY scheduled_for ASC, subject ASC, created_at ASC
         """,
-        (DEFAULT_CLASS_GROUP,),
+        (class_group or DEFAULT_CLASS_GROUP,),
     ).fetchall()
     return [dict(row) for row in rows]
 
 
-def build_personal_schedule(full_name: str) -> list[dict[str, object]]:
+def build_personal_schedule(full_name: str, class_group: str) -> list[dict[str, object]]:
     grouped_schedule: dict[str, list[dict[str, str]]] = {}
 
-    for event in fetch_all_events():
+    for event in fetch_all_events(class_group):
         if event["event_type"] == "interrogazione":
             schedule = parse_interrogation_schedule_json(event.get("interrogation_schedule", ""))
             for date_value, students in schedule.items():
@@ -1353,7 +1394,7 @@ def build_personal_schedule(full_name: str) -> list[dict[str, object]]:
     ]
 
 
-def fetch_event_by_id(event_id: int) -> dict | None:
+def fetch_event_by_id(event_id: int, class_group: str) -> dict | None:
     row = get_db().execute(
         """
         SELECT id, title, subject, event_type, class_group, scheduled_for,
@@ -1363,7 +1404,7 @@ def fetch_event_by_id(event_id: int) -> dict | None:
         FROM events
         WHERE id = ? AND class_group = ?
         """,
-        (event_id, DEFAULT_CLASS_GROUP),
+        (event_id, class_group or DEFAULT_CLASS_GROUP),
     ).fetchone()
     return dict(row) if row is not None else None
 
@@ -1506,7 +1547,7 @@ def validate_event_payload(payload: dict) -> tuple[dict[str, str], dict[str, str
     title = str(payload.get("title", "")).strip()
     cleaned["title"] = title or build_default_title(subject, event_type)
 
-    cleaned["class_group"] = DEFAULT_CLASS_GROUP
+    cleaned["class_group"] = str(payload.get("class_group", DEFAULT_CLASS_GROUP)).strip().upper() or DEFAULT_CLASS_GROUP
 
     cleaned["notes"] = str(payload.get("notes", "")).strip()
     cleaned["created_by"] = str(payload.get("created_by", "")).strip()

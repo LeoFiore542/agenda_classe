@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>aGenda</title>
+    <title>aGenda - Sign up</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -15,37 +15,44 @@
         <section class="panel login-panel">
             <div class="login-copy">
                 <p class="eyebrow">aGenda scuola</p>
-                <h1>Benvenuto</h1>
-                <p class="hero-copy">
-                    Accedi al tuo account oppure crea un nuovo profilo studente/rappresentante per la tua classe.
-                </p>
+                <h1>Crea account</h1>
+                <p class="hero-copy">Registrati inserendo email, username, password e classe.</p>
                 <div class="session-actions">
                     <a class="ghost-button" href="{{ url_for('signup_page') }}">Sign up</a>
                     <a class="primary-button" href="{{ url_for('login') }}">Log in</a>
                 </div>
             </div>
 
-            <form class="event-form simple-form" method="post" action="{{ url_for('login') }}">
-                <input type="hidden" name="next" value="{{ next_url }}">
-
+            <form class="event-form simple-form" method="post" action="{{ url_for('signup') }}">
+                <label>
+                    Email
+                    <input type="email" name="email" autocomplete="email" required>
+                </label>
                 <label>
                     Username
-                    <input type="text" name="username" placeholder="cognome.nome" autocomplete="username" required>
+                    <input type="text" name="username" autocomplete="username" required>
                 </label>
-
                 <label>
                     Password
                     <div class="password-input-wrap">
-                        <input type="password" name="password" placeholder="Inserisci la password" autocomplete="current-password" required data-password-field>
+                        <input type="password" name="password" autocomplete="new-password" required data-password-field>
                         <button type="button" class="ghost-button password-toggle" data-password-toggle>Mostra</button>
                     </div>
+                </label>
+                <label>
+                    Classe
+                    <input type="text" name="class_group" placeholder="es. 4G" required>
+                </label>
+                <label class="credential-checkbox">
+                    <input type="checkbox" name="is_representative">
+                    <span>Sono rappresentante di classe</span>
                 </label>
 
                 {% if error_message %}
                 <p class="form-feedback login-error">{{ error_message }}</p>
                 {% endif %}
 
-                <button class="primary-button" type="submit">Entra</button>
+                <button class="primary-button" type="submit">Crea account</button>
             </form>
         </section>
     </main>
