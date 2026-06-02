@@ -661,6 +661,9 @@ def get_db() -> DatabaseAdapter:
 
 def init_db() -> None:
     database = get_db()
+    # Retrocompatibility: ensure legacy databases have required user columns
+    # before schema/index statements run.
+    ensure_users_columns(database)
     schema_filename = "schema_postgres.sql" if database.backend == "postgres" else "schema.sql"
     schema_path = Path(__file__).with_name(schema_filename)
     database.executescript(schema_path.read_text(encoding="utf-8"))
@@ -845,12 +848,32 @@ def run_credential_reset_once(database: DatabaseAdapter) -> None:
 
 
 def ensure_users_columns(database: DatabaseAdapter) -> None:
-    if database.backend != "sqlite":
-        return
+    if database.backend == "sqlite":
+        table_row = database.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'"
+        ).fetchone()
+        if table_row is None:
+            return
+        columns = {
+            row["name"] for row in database.execute("PRAGMA table_info(users)").fetchall()
+        }
+    else:
+        table_row = database.execute(
+            "SELECT to_regclass('public.users') AS table_name"
+        ).fetchone()
+        if table_row is None or not table_row.get("table_name"):
+            return
+        columns = {
+            row["column_name"]
+            for row in database.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users'
+                """
+            ).fetchall()
+        }
 
-    columns = {
-        row["name"] for row in database.execute("PRAGMA table_info(users)").fetchall()
-    }
     required_columns = {
         "must_change_password": "INTEGER NOT NULL DEFAULT 1",
         "email": "TEXT NOT NULL DEFAULT ''",
