@@ -15,14 +15,10 @@
         <section class="panel login-panel">
             <div class="login-copy">
                 <p class="eyebrow">aGenda scuola</p>
-                <h1>Benvenuto</h1>
+                <h1>Accesso</h1>
                 <p class="hero-copy">
-                    Accedi al tuo account oppure crea un nuovo profilo studente/rappresentante per la tua classe.
+                    Accedi con il tuo account personale.
                 </p>
-                <div class="session-actions">
-                    <a class="ghost-button" href="{{ url_for('signup_page') }}">Sign up</a>
-                    <a class="primary-button" href="{{ url_for('login') }}">Log in</a>
-                </div>
             </div>
 
             <form class="event-form simple-form" method="post" action="{{ url_for('login') }}">

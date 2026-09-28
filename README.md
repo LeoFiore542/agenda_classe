@@ -1,9 +1,9 @@
-# aGenda verifiche 4G
+# aGenda
 
-Applicazione web per organizzare le verifiche della classe 4G con:
+Applicazione web per organizzare verifiche, interrogazioni ed eventi di classe con:
 
 - Flask per il backend
-- SQLite per il database
+- SQLite per il database (file locale nel progetto)
 - JavaScript vanilla per logica client e aggiornamenti dinamici
 
 ## Funzioni incluse
@@ -12,6 +12,7 @@ Applicazione web per organizzare le verifiche della classe 4G con:
 - inserimento rapido di verifiche per materia
 - eliminazione eventi
 - riepilogo del mese e dettaglio del giorno selezionato
+- login account
 
 ## Avvio locale
 
@@ -38,49 +39,65 @@ flask --app app run --debug
 
 Il database SQLite viene creato automaticamente in `instance/school_planner.db`.
 
-## Deploy su Vercel + Supabase
+## Deploy su PythonAnywhere
 
-L'app ora supporta due modalita database:
+L'app salva utenti ed eventi in un file SQLite dentro il progetto (`instance/school_planner.db`).
+Non serve Supabase/Postgres: tutto resta sul filesystem di PythonAnywhere.
 
-- locale: SQLite (automatico, senza variabili extra)
-- produzione: PostgreSQL (Supabase) tramite `DATABASE_URL`
+### 1) Carica il codice
 
-### 1) Crea database su Supabase
-
-1. Crea un nuovo progetto su Supabase.
-2. Vai in `Settings > Database` e copia la `Connection string` in formato URI.
-3. Verifica che la URI includa `sslmode=require`.
-
-Esempio:
+- Crea un account su [PythonAnywhere](https://www.pythonanywhere.com/)
+- In **Files** / **Bash**, clona o carica la cartella del progetto, ad esempio:
 
 ```bash
-postgresql://postgres.xxxxx:[PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
+cd ~
+git clone <URL-del-tuo-repo> aGenda
+cd aGenda
 ```
 
-### 2) Configura variabili su Vercel
+### 2) Virtualenv e dipendenze
 
-Nel progetto Vercel imposta queste Environment Variables:
+```bash
+python3.10 -m venv ~/.virtualenvs/agenda
+source ~/.virtualenvs/agenda/bin/activate
+pip install -r ~/aGenda/requirements.txt
+```
 
-- `DATABASE_URL`: URI PostgreSQL di Supabase
-- `SECRET_KEY`: chiave segreta Flask robusta (non usare il default)
+### 3) Web app
 
-### 3) Collega repository a Vercel
+In **Web** → **Add a new web app**:
 
-1. Importa il repository in Vercel.
-2. Mantieni la configurazione Python automatica.
-3. Conferma il deploy.
+1. Scegli **Manual configuration** → Python 3.10 (o la versione che usi)
+2. **Virtualenv**: `/home/<username>/.virtualenvs/agenda`
+3. **Source code**: `/home/<username>/aGenda`
+4. **WSGI configuration file**: apri il file WSGI e sostituisci il contenuto con quello di `wsgi.py` del repo, oppure punta direttamente a:
 
-Il file `vercel.json` instrada tutte le route a `app.py` con runtime `@vercel/python`.
+```text
+/home/<username>/aGenda/wsgi.py
+```
 
-### 4) Primo avvio
+Nel WSGI assicurati che `project_home` / `sys.path` punti a `/home/<username>/aGenda`.
 
-Al primo avvio in produzione l'app inizializza automaticamente lo schema Postgres usando `schema_postgres.sql`.
+5. (Consigliato) Imposta `SECRET_KEY` nelle Environment variables della Web app.
 
-## Variabili ambiente
+6. **Reload** della web app.
 
-- `DATABASE_URL` (opzionale in locale, obbligatoria in deploy)
-- `SECRET_KEY` (consigliata in locale, obbligatoria in deploy)
-- `PORT` / `HOST` (solo esecuzione locale custom)
+### 4) Database
+
+Al primo accesso l'app crea automaticamente:
+
+- `instance/school_planner.db`
+- schema tabelle
+- account owner `fiorini.leonardo` (password iniziale = username)
+
+I dati restano sul server in quel file. Per backup: scaricalo da Files → `aGenda/instance/school_planner.db`.
+
+> Nota: il file `.db` non e versionato in git (vedi `.gitignore`), cosi non pubblichi password. Su PythonAnywhere vive solo sulla macchina.
+
+## Variabili ambiente (opzionali)
+
+- `SECRET_KEY`
+- `PORT` / `HOST` (solo locale)
 
 ## Test
 

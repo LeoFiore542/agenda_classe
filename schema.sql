@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS events (
     title TEXT NOT NULL,
     subject TEXT NOT NULL,
     event_type TEXT NOT NULL CHECK (event_type IN ('verifica', 'interrogazione', 'evento')),
-    class_group TEXT NOT NULL DEFAULT 'Classe',
+    class_group TEXT NOT NULL DEFAULT '5G',
     scheduled_for TEXT NOT NULL,
     interrogation_mode TEXT NOT NULL DEFAULT '',
     interrogation_end TEXT NOT NULL DEFAULT '',

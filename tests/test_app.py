@@ -178,7 +178,7 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
 
         created = response.get_json()
-        self.assertEqual(created["class_group"], "4G")
+        self.assertEqual(created["class_group"], "5G")
         self.assertEqual(created["event_type"], "verifica")
         self.assertEqual(created["notes"], "Equazioni di primo grado")
 
@@ -189,7 +189,7 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["subject"], "Matematica")
         self.assertEqual(data[0]["status"], "programmata")
-        self.assertEqual(data[0]["class_group"], "4G")
+        self.assertEqual(data[0]["class_group"], "5G")
 
     def test_force_class_group_to_4g(self):
         self.login_and_change_password()
@@ -203,7 +203,7 @@ class AppTestCase(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.get_json()["class_group"], "4G")
+        self.assertEqual(response.get_json()["class_group"], "5G")
 
     def test_create_generic_event(self):
         self.login_and_change_password()
