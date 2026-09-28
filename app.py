@@ -666,7 +666,41 @@ def build_username_from_full_name(full_name: str, taken_usernames: set[str] | No
 
 
 def seed_user_accounts(database: DatabaseAdapter) -> None:
-    return
+    existing_rows = database.execute("SELECT full_name, username FROM users").fetchall()
+    existing_names = {row["full_name"] for row in existing_rows}
+    taken_usernames = {row["username"] for row in existing_rows}
+
+    for full_name in read_class_roster():
+        if full_name in existing_names:
+            continue
+
+        base_username = build_username_from_full_name(full_name)
+        if base_username in {OWNER_USERNAME, LEGACY_OWNER_USERNAME}:
+            # Owner account is created/updated by ensure_owner_account.
+            continue
+
+        username = build_username_from_full_name(full_name, taken_usernames)
+        database.execute(
+            """
+            INSERT INTO users (
+                full_name, email, username, password_hash, class_group,
+                is_representative, is_owner, must_change_password
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                full_name,
+                "",
+                username,
+                generate_password_hash(username, method="pbkdf2:sha256"),
+                DEFAULT_CLASS_GROUP,
+                0,
+                0,
+                1,
+            ),
+        )
+        existing_names.add(full_name)
+        taken_usernames.add(username)
 
 
 def seed_roles_and_permissions(database: DatabaseAdapter) -> None:
