@@ -13,6 +13,13 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Sequence
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:
+    psycopg = None
+    dict_row = None
+
 from flask import Flask, current_app, flash, g, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -54,23 +61,42 @@ OWNER_PERMISSIONS = {
 
 
 class DatabaseAdapter:
-    def __init__(self, connection: Any):
+    def __init__(self, connection: Any, backend: str):
         self.connection = connection
-        self.backend = "sqlite"
+        self.backend = backend
+
+    def _format_query(self, query: str) -> str:
+        if self.backend == "postgres":
+            return query.replace("?", "%s")
+        return query
 
     def execute(self, query: str, params: Sequence[Any] | None = None):
+        formatted_query = self._format_query(query)
         if params is None:
-            return self.connection.execute(query)
-        return self.connection.execute(query, tuple(params))
+            return self.connection.execute(formatted_query)
+        return self.connection.execute(formatted_query, tuple(params))
 
     def executescript(self, script: str) -> None:
-        self.connection.executescript(script)
+        if self.backend == "sqlite":
+            self.connection.executescript(script)
+            return
+
+        for statement in (chunk.strip() for chunk in script.split(";")):
+            if statement:
+                self.connection.execute(statement)
 
     def commit(self) -> None:
         self.connection.commit()
 
     def close(self) -> None:
         self.connection.close()
+
+
+def detect_db_backend(database_url: str | None) -> str:
+    normalized = str(database_url or "").strip().lower()
+    if normalized.startswith("postgresql://") or normalized.startswith("postgres://"):
+        return "postgres"
+    return "sqlite"
 
 
 def login_required(view_func):
@@ -121,6 +147,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_mapping(
         DATABASE=str(Path(app.instance_path) / "school_planner.db"),
+        DATABASE_URL=os.environ.get("DATABASE_URL", ""),
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-4g-login-secret"),
         TEMPLATES_AUTO_RELOAD=True,
         SEND_FILE_MAX_AGE_DEFAULT=0,
@@ -129,10 +156,13 @@ def create_app(test_config: dict | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
-    try:
-        Path(app.instance_path).mkdir(parents=True, exist_ok=True)
-    except OSError:
-        app.config["DATABASE"] = "/tmp/school_planner.db"
+    app.config["DB_BACKEND"] = detect_db_backend(app.config.get("DATABASE_URL"))
+
+    if app.config["DB_BACKEND"] == "sqlite":
+        try:
+            Path(app.instance_path).mkdir(parents=True, exist_ok=True)
+        except OSError:
+            app.config["DATABASE"] = "/tmp/school_planner.db"
 
     _db_ready = False
     _db_init_lock = threading.Lock()
@@ -557,16 +587,30 @@ def create_app(test_config: dict | None = None) -> Flask:
 
 def get_db() -> DatabaseAdapter:
     if "db" not in g:
-        connection = sqlite3.connect(current_app.config["DATABASE"])
-        connection.row_factory = sqlite3.Row
-        g.db = DatabaseAdapter(connection=connection)
+        backend = current_app.config.get("DB_BACKEND", "sqlite")
+        if backend == "postgres":
+            if psycopg is None or dict_row is None:
+                raise RuntimeError(
+                    "PostgreSQL support requires psycopg. Install dependencies from requirements.txt."
+                )
+            connection = psycopg.connect(
+                current_app.config["DATABASE_URL"],
+                row_factory=dict_row,  # type: ignore[arg-type]
+                autocommit=False,
+            )
+            g.db = DatabaseAdapter(connection=connection, backend="postgres")
+        else:
+            connection = sqlite3.connect(current_app.config["DATABASE"])
+            connection.row_factory = sqlite3.Row
+            g.db = DatabaseAdapter(connection=connection, backend="sqlite")
     return g.db
 
 
 def init_db() -> None:
     database = get_db()
     ensure_users_columns(database)
-    schema_path = Path(__file__).with_name("schema.sql")
+    schema_filename = "schema_postgres.sql" if database.backend == "postgres" else "schema.sql"
+    schema_path = Path(__file__).with_name(schema_filename)
     database.executescript(schema_path.read_text(encoding="utf-8"))
     migrate_events_table(database)
     ensure_events_columns(database)
@@ -737,15 +781,32 @@ def run_credential_reset_once(database: DatabaseAdapter) -> None:
 
 
 def ensure_users_columns(database: DatabaseAdapter) -> None:
-    table_row = database.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'"
-    ).fetchone()
-    if table_row is None:
-        return
+    if database.backend == "sqlite":
+        table_row = database.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'"
+        ).fetchone()
+        if table_row is None:
+            return
+        columns = {
+            row["name"] for row in database.execute("PRAGMA table_info(users)").fetchall()
+        }
+    else:
+        table_row = database.execute(
+            "SELECT to_regclass('public.users') AS table_name"
+        ).fetchone()
+        if table_row is None or not table_row.get("table_name"):
+            return
+        columns = {
+            row["column_name"]
+            for row in database.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'users'
+                """
+            ).fetchall()
+        }
 
-    columns = {
-        row["name"] for row in database.execute("PRAGMA table_info(users)").fetchall()
-    }
     required_columns = {
         "must_change_password": "INTEGER NOT NULL DEFAULT 1",
         "email": "TEXT NOT NULL DEFAULT ''",
@@ -1076,6 +1137,9 @@ def build_school_countdown_payload() -> dict[str, object]:
 
 
 def migrate_events_table(database: DatabaseAdapter) -> None:
+    if database.backend != "sqlite":
+        return
+
     row = database.execute(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'events'"
     ).fetchone()
@@ -1154,6 +1218,9 @@ def migrate_events_table(database: DatabaseAdapter) -> None:
 
 
 def ensure_events_columns(database: DatabaseAdapter) -> None:
+    if database.backend != "sqlite":
+        return
+
     columns = {
         row["name"] for row in database.execute("PRAGMA table_info(events)").fetchall()
     }

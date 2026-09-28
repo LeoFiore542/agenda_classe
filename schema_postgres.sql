@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     title TEXT NOT NULL,
     subject TEXT NOT NULL,
     event_type TEXT NOT NULL CHECK (event_type IN ('verifica', 'interrogazione', 'evento')),
@@ -13,11 +13,11 @@ CREATE TABLE IF NOT EXISTS events (
     notes TEXT NOT NULL DEFAULT '',
     created_by TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'programmata' CHECK (status IN ('programmata', 'completata', 'rinviata')),
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     full_name TEXT NOT NULL,
     email TEXT NOT NULL DEFAULT '',
     username TEXT NOT NULL UNIQUE,
@@ -26,27 +26,24 @@ CREATE TABLE IF NOT EXISTS users (
     is_representative INTEGER NOT NULL DEFAULT 0,
     is_owner INTEGER NOT NULL DEFAULT 0,
     must_change_password INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS roles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id BIGSERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
-    role_id INTEGER NOT NULL,
+    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission TEXT NOT NULL,
-    UNIQUE(role_id, permission),
-    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    UNIQUE(role_id, permission)
 );
 
 CREATE TABLE IF NOT EXISTS user_roles (
-    user_id INTEGER NOT NULL,
-    role_id INTEGER NOT NULL,
-    UNIQUE(user_id, role_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    UNIQUE(user_id, role_id)
 );
 
 CREATE TABLE IF NOT EXISTS app_settings (
