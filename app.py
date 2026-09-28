@@ -40,7 +40,7 @@ DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8000
 OWNER_USERNAME = "fiorini.leonardo"
 LEGACY_OWNER_USERNAME = "leonardo.fiorini"
-OWNER_FULL_NAME = "Leonardo Fiorini"
+OWNER_FULL_NAME = "Fiorini Leonardo"
 CREDENTIAL_RESET_MIGRATION_KEY = "credential_reset_2026_04"
 COUNTDOWN_TARGET_DATE_KEY = "school_countdown_target_date"
 USEFUL_LINKS_KEY = "useful_links"
@@ -755,8 +755,12 @@ def ensure_owner_account(database: DatabaseAdapter) -> None:
 
     if owner_row is not None:
         database.execute(
-            "UPDATE users SET is_owner = 1, is_representative = 1, class_group = ? WHERE id = ?",
-            (DEFAULT_CLASS_GROUP, owner_row["id"]),
+            """
+            UPDATE users
+            SET full_name = ?, is_owner = 1, is_representative = 1, class_group = ?
+            WHERE id = ?
+            """,
+            (OWNER_FULL_NAME, DEFAULT_CLASS_GROUP, owner_row["id"]),
         )
 
 
