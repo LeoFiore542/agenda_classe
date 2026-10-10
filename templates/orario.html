@@ -64,10 +64,7 @@
                                 <span class="visually-hidden">Ora</span>
                             </th>
                             {% for day in timetable.days %}
-                            <th scope="col">
-                                <span class="timetable-day-full">{{ day }}</span>
-                                <span class="timetable-day-short">{{ day[:3] }}</span>
-                            </th>
+                            <th scope="col">{{ day }}</th>
                             {% endfor %}
                         </tr>
                     </thead>
@@ -89,14 +86,13 @@
                                     type="text"
                                     maxlength="40"
                                     value="{{ subject }}"
-                                    title="{{ subject }}"
                                     data-day="{{ day }}"
                                     data-period="{{ period.number }}"
                                     aria-label="{{ day }}, {{ period.number }}ª ora"
                                     placeholder="Materia"
                                 >
                                 {% elif subject %}
-                                <span class="timetable-subject" title="{{ subject }}">{{ subject }}</span>
+                                <span class="timetable-subject">{{ subject }}</span>
                                 {% else %}
                                 <span class="timetable-placeholder">—</span>
                                 {% endif %}
