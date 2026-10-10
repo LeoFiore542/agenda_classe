@@ -1,7 +1,9 @@
 (() => {
     const OVERLAY_ID = "global-loading-overlay";
+    const READ_DELAY_MS = 280;
     let pendingCount = 0;
     let hideTimeoutId = null;
+    let showTimeoutId = null;
 
     function ensureOverlay() {
         let overlay = document.getElementById(OVERLAY_ID);
@@ -25,23 +27,49 @@
         return overlay;
     }
 
-    function showLoading() {
-        pendingCount += 1;
-        if (hideTimeoutId !== null) {
-            window.clearTimeout(hideTimeoutId);
-            hideTimeoutId = null;
-        }
-
+    function revealOverlay() {
         const overlay = ensureOverlay();
         overlay.removeAttribute("hidden");
         overlay.setAttribute("aria-hidden", "false");
         document.body.classList.add("loading-active");
     }
 
-    function hideLoading() {
+    function beginLoading(immediate) {
+        pendingCount += 1;
+        if (hideTimeoutId !== null) {
+            window.clearTimeout(hideTimeoutId);
+            hideTimeoutId = null;
+        }
+
+        if (immediate) {
+            if (showTimeoutId !== null) {
+                window.clearTimeout(showTimeoutId);
+                showTimeoutId = null;
+            }
+            revealOverlay();
+            return;
+        }
+
+        if (showTimeoutId !== null || document.body.classList.contains("loading-active")) {
+            return;
+        }
+        showTimeoutId = window.setTimeout(() => {
+            showTimeoutId = null;
+            if (pendingCount > 0) {
+                revealOverlay();
+            }
+        }, READ_DELAY_MS);
+    }
+
+    function endLoading() {
         pendingCount = Math.max(0, pendingCount - 1);
         if (pendingCount > 0) {
             return;
+        }
+
+        if (showTimeoutId !== null) {
+            window.clearTimeout(showTimeoutId);
+            showTimeoutId = null;
         }
 
         hideTimeoutId = window.setTimeout(() => {
@@ -53,13 +81,13 @@
             overlay.setAttribute("aria-hidden", "true");
             document.body.classList.remove("loading-active");
             hideTimeoutId = null;
-        }, 120);
+        }, 80);
     }
 
     function shouldTrackFetch(input, init) {
         const method = String((init && init.method) || "GET").toUpperCase();
         if (method !== "GET" && method !== "HEAD") {
-            return true;
+            return { track: true, immediate: true };
         }
 
         let url = "";
@@ -69,21 +97,24 @@
             url = input.url;
         }
 
-        // Track API reads that can freeze the UI while waiting.
-        return url.includes("/api/");
+        if (!url.includes("/api/")) {
+            return { track: false, immediate: false };
+        }
+        // Delay overlay on reads so quick responses don't flash.
+        return { track: true, immediate: false };
     }
 
     const originalFetch = window.fetch.bind(window);
     window.fetch = async function trackedFetch(input, init) {
-        const track = shouldTrackFetch(input, init);
+        const { track, immediate } = shouldTrackFetch(input, init);
         if (track) {
-            showLoading();
+            beginLoading(immediate);
         }
         try {
             return await originalFetch(input, init);
         } finally {
             if (track) {
-                hideLoading();
+                endLoading();
             }
         }
     };
@@ -121,7 +152,7 @@
             if (event.defaultPrevented) {
                 return;
             }
-            showLoading();
+            beginLoading(true);
         },
         true
     );
@@ -140,14 +171,14 @@
             if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
                 return;
             }
-            showLoading();
+            beginLoading(true);
         },
         true
     );
 
     window.aGendaLoading = {
-        show: showLoading,
-        hide: hideLoading,
+        show: () => beginLoading(true),
+        hide: endLoading,
     };
 
     if (document.readyState === "loading") {

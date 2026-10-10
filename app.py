@@ -45,6 +45,8 @@ CREDENTIAL_RESET_MIGRATION_KEY = "credential_reset_2026_04"
 COUNTDOWN_TARGET_DATE_KEY = "school_countdown_target_date"
 USEFUL_LINKS_KEY = "useful_links"
 WEEKLY_TIMETABLE_KEY = "weekly_timetable"
+SCHEMA_VERSION_KEY = "schema_version"
+CURRENT_SCHEMA_VERSION = "2026-10-10-orario"
 SCHOOL_HOURS_PER_DAY = 6
 SCHOOL_WEEKDAYS = ("Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì")
 SCHOOL_PERIODS = (
@@ -350,6 +352,24 @@ def create_app(test_config: dict | None = None) -> Flask:
         }
         rows = fetch_events(filters, str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)))
         return jsonify(rows)
+
+    @app.get("/api/bootstrap")
+    @login_required
+    @password_change_not_required
+    @permission_required("view_events")
+    def bootstrap_agenda():
+        class_group = str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP))
+        filters = {
+            "month": request.args.get("month", "").strip(),
+            "subject": request.args.get("subject", "").strip(),
+        }
+        return jsonify(
+            {
+                "events": fetch_events(filters, class_group),
+                "countdown": build_school_countdown_payload(),
+                "links": get_useful_links_payload(),
+            }
+        )
 
     @app.post("/api/events")
     @login_required
@@ -669,6 +689,8 @@ def get_db() -> DatabaseAdapter:
                 current_app.config["DATABASE_URL"],
                 row_factory=dict_row,  # type: ignore[arg-type]
                 autocommit=False,
+                prepare_threshold=None,
+                connect_timeout=8,
             )
             g.db = DatabaseAdapter(connection=connection, backend="postgres")
         else:
@@ -678,8 +700,39 @@ def get_db() -> DatabaseAdapter:
     return g.db
 
 
+def schema_already_ready(database: DatabaseAdapter) -> bool:
+    try:
+        if database.backend == "postgres":
+            table_row = database.execute(
+                "SELECT to_regclass('public.app_settings') AS table_name"
+            ).fetchone()
+            if table_row is None or not table_row.get("table_name"):
+                return False
+        else:
+            table_row = database.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'app_settings'"
+            ).fetchone()
+            if table_row is None:
+                return False
+
+        version_row = database.execute(
+            "SELECT value FROM app_settings WHERE key = ?",
+            (SCHEMA_VERSION_KEY,),
+        ).fetchone()
+        return version_row is not None and str(version_row["value"]) == CURRENT_SCHEMA_VERSION
+    except Exception:
+        return False
+
+
 def init_db() -> None:
     database = get_db()
+    if schema_already_ready(database):
+        # Keep roster/owner in sync without re-running the full schema every cold start.
+        seed_user_accounts(database)
+        ensure_owner_account(database)
+        database.commit()
+        return
+
     ensure_users_columns(database)
     schema_filename = "schema_postgres.sql" if database.backend == "postgres" else "schema.sql"
     schema_path = Path(__file__).with_name(schema_filename)
@@ -692,6 +745,7 @@ def init_db() -> None:
     ensure_owner_account(database)
     ensure_default_user_roles(database)
     run_credential_reset_once(database)
+    set_app_setting(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION)
     database.commit()
 
 

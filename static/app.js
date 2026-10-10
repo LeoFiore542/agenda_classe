@@ -109,9 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
     bindEvents();
     closeFormModal({ resetState: false });
     updateInterrogationFields();
-    loadCountdown();
-    loadUsefulLinks();
-    loadEvents();
+    loadAgendaBootstrap();
 });
 
 function bindEvents() {
@@ -191,6 +189,36 @@ function bindEvents() {
         });
         updateInvolvedFilterButton();
     }
+}
+
+async function loadAgendaBootstrap() {
+    const params = new URLSearchParams({ month: state.displayedMonth });
+    const response = await fetch(`/api/bootstrap?${params.toString()}`);
+    if (!response.ok) {
+        if (elements.countdownTargetLabel) {
+            elements.countdownTargetLabel.textContent = "Impossibile caricare i dati iniziali.";
+        }
+        await Promise.allSettled([loadCountdown(), loadUsefulLinks(), loadEvents()]);
+        return;
+    }
+
+    const payload = await response.json();
+    state.events = Array.isArray(payload.events) ? payload.events : [];
+    state.usefulLinks = Array.isArray(payload.links) ? payload.links : [];
+    renderMonthLabel();
+    renderCalendar();
+    renderEventList();
+    renderSummary();
+    renderUsefulLinks();
+    if (state.isOwner && elements.usefulLinksInput) {
+        elements.usefulLinksInput.value = state.usefulLinks
+            .map((item) => `${item.label} | ${item.url}`)
+            .join("\n");
+    }
+    if (payload.countdown) {
+        renderCountdown(payload.countdown);
+    }
+    scheduleCountdownRefresh();
 }
 
 async function loadCountdown() {
