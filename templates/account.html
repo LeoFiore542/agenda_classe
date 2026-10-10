@@ -140,6 +140,7 @@
 
     </div>
 
+    <script src="{{ url_for('static', filename='loading-overlay.js') }}"></script>
     {% if is_owner and not current_user.must_change_password %}
     <script src="{{ url_for('static', filename='account.js') }}"></script>
     {% endif %}
