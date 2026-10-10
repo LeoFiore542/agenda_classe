@@ -20,7 +20,19 @@ except ImportError:
     psycopg = None
     dict_row = None
 
-from flask import Flask, current_app, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Flask,
+    current_app,
+    flash,
+    g,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    session,
+    url_for,
+)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -302,6 +314,24 @@ def create_app(test_config: dict | None = None) -> Flask:
         g.current_user = fetch_user_by_id(g.current_user["id"])
         flash("Password aggiornata correttamente.", "success")
         return redirect(url_for("index"))
+
+    @app.get("/manifest.webmanifest")
+    def web_manifest():
+        response = send_from_directory(
+            Path(app.root_path) / "static",
+            "manifest.webmanifest",
+            mimetype="application/manifest+json",
+        )
+        response.headers["Cache-Control"] = "public, max-age=3600"
+        return response
+
+    @app.get("/sw.js")
+    def service_worker():
+        response = send_from_directory(Path(app.root_path) / "static", "sw.js")
+        response.headers["Content-Type"] = "application/javascript; charset=utf-8"
+        response.headers["Service-Worker-Allowed"] = "/"
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
     @app.get("/account")
     @login_required
