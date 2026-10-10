@@ -29,12 +29,13 @@
                 <span class="session-user-meta">@{{ current_user.username }}</span>
             </div>
             <div class="session-actions">
-                <a class="ghost-button" href="{{ url_for('account') }}">Area personale</a>
                 <form method="post" action="{{ url_for('logout') }}">
                     <button class="ghost-button" type="submit">Esci</button>
                 </form>
             </div>
         </div>
+
+        {% include "partials/main_nav.html" %}
 
         <header class="hero">
             <div>

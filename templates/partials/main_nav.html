@@ -1,0 +1,17 @@
+<nav class="main-tabs panel" aria-label="Sezioni principali">
+    <a
+        class="main-tab{% if active_tab == 'personale' %} is-active{% endif %}"
+        href="{{ url_for('account') }}"
+        {% if active_tab == 'personale' %}aria-current="page"{% endif %}
+    >Area personale</a>
+    <a
+        class="main-tab{% if active_tab == 'agenda' %} is-active{% endif %}"
+        href="{{ url_for('index') }}"
+        {% if active_tab == 'agenda' %}aria-current="page"{% endif %}
+    >Agenda</a>
+    <a
+        class="main-tab{% if active_tab == 'orario' %} is-active{% endif %}"
+        href="{{ url_for('orario') }}"
+        {% if active_tab == 'orario' %}aria-current="page"{% endif %}
+    >Orario</a>
+</nav>

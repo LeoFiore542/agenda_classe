@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orario · aGenda</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-stack">
+            {% for category, message in messages %}
+            <div class="panel flash-panel flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="session-bar panel">
+            <div class="session-user">
+                <span class="session-user-label">Accesso attivo</span>
+                <strong>{{ current_user.full_name }}</strong>
+                <span class="session-user-meta">@{{ current_user.username }}</span>
+            </div>
+            <div class="session-actions">
+                <form method="post" action="{{ url_for('logout') }}">
+                    <button class="ghost-button" type="submit">Esci</button>
+                </form>
+            </div>
+        </div>
+
+        {% include "partials/main_nav.html" %}
+
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Classe {{ class_group }}</p>
+                <h1>Orario</h1>
+            </div>
+        </header>
+
+        <section class="panel timetable-panel">
+            {% if is_owner %}
+            <div class="timetable-toolbar">
+                <p class="timetable-hint">Solo tu puoi modificare le materie. Scrivi nelle celle e salva.</p>
+                <div class="timetable-toolbar-actions">
+                    <p class="timetable-feedback" id="timetable-feedback" aria-live="polite"></p>
+                    <button class="primary-button" type="button" id="save-timetable-button">Salva orario</button>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="timetable-scroll">
+                <table class="timetable-grid" id="timetable-grid" data-editable="{{ 'true' if is_owner else 'false' }}">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="timetable-corner">
+                                <span class="visually-hidden">Ora</span>
+                            </th>
+                            {% for day in timetable.days %}
+                            <th scope="col">{{ day }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for period in timetable.periods %}
+                        <tr>
+                            <th scope="row" class="timetable-period">
+                                <span class="timetable-period-badge" aria-label="{{ period.number }}ª ora">
+                                    <span class="timetable-period-index">{{ period.number }}</span>
+                                    <span class="timetable-period-suffix">ª</span>
+                                </span>
+                            </th>
+                            {% for day in timetable.days %}
+                            {% set subject = timetable.slots[day][period.number - 1] %}
+                            <td class="timetable-slot{% if not subject %} is-empty{% endif %}">
+                                {% if is_owner %}
+                                <input
+                                    class="timetable-input"
+                                    type="text"
+                                    maxlength="40"
+                                    value="{{ subject }}"
+                                    data-day="{{ day }}"
+                                    data-period="{{ period.number }}"
+                                    aria-label="{{ day }}, {{ period.number }}ª ora"
+                                    placeholder="Materia"
+                                >
+                                {% elif subject %}
+                                <span class="timetable-subject">{{ subject }}</span>
+                                {% else %}
+                                <span class="timetable-placeholder">—</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    {% if is_owner %}
+    <script src="{{ url_for('static', filename='orario.js') }}" defer></script>
+    {% endif %}
+</body>
+</html>

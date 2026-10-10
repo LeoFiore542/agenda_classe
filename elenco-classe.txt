@@ -9,7 +9,6 @@ Della Valle Sara
 Di Pietro Domenico
 Di Schino Valerio
 Fiorini Leonardo
-Gaudino Natalia
 Iannella Francesco
 Manea Valentina
 Mazzoni Matteo
@@ -19,3 +18,4 @@ Pisani Claudio
 Rosati Luca
 Rossi Giacomo
 Sonni Vinicio
+Toppi Gabriele

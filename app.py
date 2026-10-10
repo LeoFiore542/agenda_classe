@@ -44,7 +44,17 @@ OWNER_FULL_NAME = "Fiorini Leonardo"
 CREDENTIAL_RESET_MIGRATION_KEY = "credential_reset_2026_04"
 COUNTDOWN_TARGET_DATE_KEY = "school_countdown_target_date"
 USEFUL_LINKS_KEY = "useful_links"
+WEEKLY_TIMETABLE_KEY = "weekly_timetable"
 SCHOOL_HOURS_PER_DAY = 6
+SCHOOL_WEEKDAYS = ("Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì")
+SCHOOL_PERIODS = (
+    {"number": 1},
+    {"number": 2},
+    {"number": 3},
+    {"number": 4},
+    {"number": 5},
+    {"number": 6},
+)
 
 STUDENT_PERMISSIONS = {"view_events"}
 REPRESENTATIVE_PERMISSIONS = {"create_events", "edit_events", "delete_events", "view_events"}
@@ -57,6 +67,7 @@ OWNER_PERMISSIONS = {
     "delete_events",
     "view_events",
     "manage_countdown_target",
+    "manage_timetable",
 }
 
 
@@ -97,6 +108,17 @@ def detect_db_backend(database_url: str | None) -> str:
     if normalized.startswith("postgresql://") or normalized.startswith("postgres://"):
         return "postgres"
     return "sqlite"
+
+
+def local_dev_auto_login_enabled(app: Flask) -> bool:
+    """Local SQLite only: skip login and enter as owner. Never on Vercel/Postgres."""
+    if app.config.get("TESTING"):
+        return False
+    if detect_db_backend(app.config.get("DATABASE_URL")) != "sqlite":
+        return False
+    if str(app.config.get("DATABASE_URL") or "").strip():
+        return False
+    return True
 
 
 def login_required(view_func):
@@ -180,6 +202,20 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.before_request
     def load_current_user() -> None:
         user_id = session.get("user_id")
+        if user_id is None and local_dev_auto_login_enabled(app):
+            owner = fetch_user_by_username(OWNER_USERNAME)
+            if owner is not None:
+                if owner.get("must_change_password"):
+                    database = get_db()
+                    database.execute(
+                        "UPDATE users SET must_change_password = 0 WHERE id = ?",
+                        (owner["id"],),
+                    )
+                    database.commit()
+                    owner = fetch_user_by_id(owner["id"])
+                session["user_id"] = owner["id"]
+                g.current_user = owner
+                return
         g.current_user = fetch_user_by_id(user_id) if user_id is not None else None
 
     @app.context_processor
@@ -275,6 +311,19 @@ def create_app(test_config: dict | None = None) -> Flask:
                 str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)),
             ),
             is_owner=is_current_user_owner(),
+            active_tab="personale",
+        )
+
+    @app.get("/orario")
+    @login_required
+    @password_change_not_required
+    def orario() -> str:
+        return render_template(
+            "orario.html",
+            class_group=str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)),
+            timetable=build_weekly_timetable(),
+            is_owner=is_current_user_owner(),
+            active_tab="orario",
         )
 
     @app.route("/")
@@ -287,6 +336,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             class_group=str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)),
             class_roster=read_class_roster(),
             is_owner=is_current_user_owner(),
+            active_tab="agenda",
         )
 
     @app.get("/api/events")
@@ -450,6 +500,28 @@ def create_app(test_config: dict | None = None) -> Flask:
         set_app_setting(USEFUL_LINKS_KEY, json.dumps(normalized_links, ensure_ascii=False))
         get_db().commit()
         return jsonify({"links": normalized_links})
+
+    @app.get("/api/timetable")
+    @login_required
+    @password_change_not_required
+    def get_weekly_timetable():
+        return jsonify(build_weekly_timetable())
+
+    @app.put("/api/timetable")
+    @login_required
+    @password_change_not_required
+    def update_weekly_timetable():
+        if not is_current_user_owner():
+            return jsonify({"error": "Solo l'admin puo modificare l'orario."}), 403
+
+        payload = request.get_json(silent=True) or {}
+        normalized_slots, errors = normalize_weekly_timetable_slots(payload.get("slots"))
+        if errors:
+            return jsonify({"errors": errors}), 400
+
+        set_app_setting(WEEKLY_TIMETABLE_KEY, json.dumps(normalized_slots, ensure_ascii=False))
+        get_db().commit()
+        return jsonify(build_weekly_timetable())
 
     @app.put("/api/countdown")
     @login_required
@@ -1089,6 +1161,56 @@ def set_app_setting(key: str, value: str) -> None:
         """,
         (key, value),
     )
+
+
+def empty_weekly_timetable_slots() -> dict[str, list[str]]:
+    return {day: ["" for _ in SCHOOL_PERIODS] for day in SCHOOL_WEEKDAYS}
+
+
+def normalize_weekly_timetable_slots(
+    raw_slots: object,
+) -> tuple[dict[str, list[str]], dict[str, str]]:
+    errors: dict[str, str] = {}
+    if not isinstance(raw_slots, dict):
+        return empty_weekly_timetable_slots(), {"slots": "Formato orario non valido."}
+
+    normalized = empty_weekly_timetable_slots()
+    for day in SCHOOL_WEEKDAYS:
+        values = raw_slots.get(day, normalized[day])
+        if not isinstance(values, list):
+            errors[day] = "Ogni giorno deve avere una lista di ore."
+            continue
+        cleaned: list[str] = []
+        for index, _period in enumerate(SCHOOL_PERIODS):
+            raw_value = values[index] if index < len(values) else ""
+            subject = " ".join(str(raw_value or "").split()).strip()
+            if len(subject) > 40:
+                errors[f"{day}:{index + 1}"] = "Materia troppo lunga (max 40 caratteri)."
+                subject = subject[:40]
+            cleaned.append(subject)
+        normalized[day] = cleaned
+
+    return normalized, errors
+
+
+def build_weekly_timetable() -> dict[str, object]:
+    """Weekly school timetable: 6 periods, Monday to Friday."""
+    slots = empty_weekly_timetable_slots()
+    raw_value = get_app_setting(WEEKLY_TIMETABLE_KEY)
+    if raw_value:
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            normalized, _errors = normalize_weekly_timetable_slots(parsed)
+            slots = normalized
+
+    return {
+        "days": list(SCHOOL_WEEKDAYS),
+        "periods": [dict(period) for period in SCHOOL_PERIODS],
+        "slots": slots,
+    }
 
 
 def get_useful_links_payload() -> list[dict[str, str]]:
