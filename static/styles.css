@@ -266,13 +266,15 @@ textarea {
 
 .timetable-scroll {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     margin: 0 -4px;
     padding: 4px;
 }
 
 .timetable-grid {
     width: 100%;
-    min-width: 720px;
+    min-width: 640px;
+    table-layout: fixed;
     border-collapse: separate;
     border-spacing: 8px;
 }
@@ -283,7 +285,7 @@ textarea {
 }
 
 .timetable-grid thead th {
-    padding: 12px 10px;
+    padding: 12px 8px;
     border-radius: 14px;
     background: rgba(31, 78, 95, 0.08);
     font-family: "Space Grotesk", sans-serif;
@@ -293,15 +295,23 @@ textarea {
     text-align: center;
 }
 
+.timetable-day-short {
+    display: none;
+}
+
 .timetable-corner {
-    width: 72px;
+    width: 56px;
     background: transparent !important;
 }
 
 .timetable-period {
-    width: 72px;
+    width: 56px;
     padding: 0;
     text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: linear-gradient(90deg, rgba(249, 245, 238, 0.98), rgba(249, 245, 238, 0.92));
 }
 
 .timetable-period-badge {
@@ -310,9 +320,9 @@ textarea {
     align-items: baseline;
     justify-content: center;
     gap: 1px;
-    min-width: 48px;
-    min-height: 48px;
-    padding: 8px 10px;
+    min-width: 42px;
+    min-height: 42px;
+    padding: 8px 9px;
     border-radius: 999px;
     background: linear-gradient(160deg, rgba(31, 78, 95, 0.12), rgba(31, 78, 95, 0.04));
     border: 1px solid rgba(31, 78, 95, 0.16);
@@ -322,26 +332,29 @@ textarea {
 
 .timetable-period-index {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     font-weight: 700;
     line-height: 1;
 }
 
 .timetable-period-suffix {
     font-family: "Space Grotesk", sans-serif;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 700;
     line-height: 1;
     opacity: 0.7;
 }
 
 .timetable-slot {
-    min-height: 64px;
-    padding: 10px;
+    min-width: 0;
+    max-width: 0;
+    min-height: 56px;
+    padding: 8px 6px;
     border-radius: 14px;
     border: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.72);
     text-align: center;
+    overflow: hidden;
 }
 
 .timetable-slot.is-empty {
@@ -350,13 +363,17 @@ textarea {
 
 .timetable-input {
     width: 100%;
-    min-height: 44px;
+    min-width: 0;
+    min-height: 40px;
     border: 0;
     outline: none;
     background: transparent;
     text-align: center;
     font-weight: 700;
     color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .timetable-input::placeholder {
@@ -366,12 +383,17 @@ textarea {
 
 .timetable-input:focus {
     color: var(--primary-strong);
+    text-overflow: clip;
 }
 
 .timetable-subject {
     display: block;
+    min-width: 0;
     font-weight: 700;
     color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .timetable-placeholder {
@@ -1460,6 +1482,73 @@ textarea {
         padding: 10px 8px;
         font-size: 0.92rem;
         border-radius: 12px;
+    }
+
+    .timetable-panel {
+        padding: 12px;
+    }
+
+    .timetable-toolbar {
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .timetable-hint {
+        font-size: 0.84rem;
+    }
+
+    .timetable-grid {
+        min-width: 520px;
+        border-spacing: 5px;
+    }
+
+    .timetable-grid thead th {
+        padding: 8px 4px;
+        font-size: 0.78rem;
+        border-radius: 10px;
+    }
+
+    .timetable-day-full {
+        display: none;
+    }
+
+    .timetable-day-short {
+        display: inline;
+    }
+
+    .timetable-corner,
+    .timetable-period {
+        width: 44px;
+    }
+
+    .timetable-period-badge {
+        min-width: 34px;
+        min-height: 34px;
+        padding: 5px 6px;
+    }
+
+    .timetable-period-index {
+        font-size: 0.95rem;
+    }
+
+    .timetable-period-suffix {
+        font-size: 0.62rem;
+    }
+
+    .timetable-slot {
+        min-height: 46px;
+        padding: 6px 4px;
+        border-radius: 10px;
+    }
+
+    .timetable-input,
+    .timetable-subject {
+        font-size: 0.78rem;
+        min-height: 34px;
+    }
+
+    .timetable-placeholder {
+        font-size: 0.95rem;
     }
 
     .month-toolbar,

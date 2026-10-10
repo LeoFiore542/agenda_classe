@@ -42,10 +42,9 @@
 
     grid.querySelectorAll(".timetable-input").forEach((input) => {
         input.addEventListener("input", () => {
-            input.closest(".timetable-slot")?.classList.toggle(
-                "is-empty",
-                !String(input.value || "").trim()
-            );
+            const value = String(input.value || "").trim();
+            input.title = value;
+            input.closest(".timetable-slot")?.classList.toggle("is-empty", !value);
         });
     });
 
