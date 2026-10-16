@@ -199,24 +199,18 @@
                     </label>
 
                     <div id="interrogation-fields" class="interrogation-fields" hidden>
-                        <label>
-                            Modalità interrogazione
-                            <select name="interrogation_mode">
-                                <option value="period">Periodo (da - a)</option>
-                                <option value="specific_days">Giorni specifici</option>
-                            </select>
-                        </label>
+                        <input type="hidden" name="interrogation_mode" value="specific_days">
+                        <input type="hidden" name="interrogation_dates" value="">
 
-                        <label id="interrogation-end-field" hidden>
-                            Al
-                            <input type="date" name="interrogation_end">
-                        </label>
-
-                        <label id="interrogation-dates-field" hidden>
-                            Giorni specifici
-                            <textarea name="interrogation_dates" rows="4" placeholder="2026-04-14&#10;2026-04-21&#10;2026-04-28"></textarea>
-                            <small class="field-help">Inserisci un giorno per riga.</small>
-                        </label>
+                        <div id="interrogation-dates-field" class="interrogation-dates-picker">
+                            <span class="field-label">Giorni</span>
+                            <div class="day-picker-row">
+                                <input id="interrogation-day-picker" type="date">
+                                <button id="add-interrogation-day" type="button" class="ghost-button">Aggiungi</button>
+                            </div>
+                            <div id="interrogation-days-list" class="interrogation-days-list" aria-live="polite"></div>
+                            <small class="field-help">Scegli un giorno e premi Aggiungi. Solo giorni feriali.</small>
+                        </div>
 
                         <input type="hidden" name="interrogation_schedule">
                         <div id="interrogation-schedule-builder" class="schedule-builder"></div>

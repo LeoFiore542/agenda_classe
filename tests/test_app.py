@@ -236,7 +236,7 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("subject", response.get_json()["errors"])
 
-    def test_create_interrogation_with_period(self):
+    def test_create_interrogation_with_legacy_period_payload(self):
         self.login_and_change_password()
         response = self.client.post(
             "/api/events",
@@ -260,7 +260,8 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         created = response.get_json()
         self.assertEqual(created["event_type"], "interrogazione")
-        self.assertEqual(created["interrogation_mode"], "period")
+        self.assertEqual(created["interrogation_mode"], "specific_days")
+        self.assertEqual(created["interrogation_dates"], "2026-04-14\n2026-04-15\n2026-04-16")
         self.assertEqual(created["interrogation_end"], "2026-04-16")
         self.assertEqual(created["notes"], "Capitolo 5, pagine 120-134")
         self.assertEqual(

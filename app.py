@@ -38,7 +38,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 VALID_EVENT_TYPES = {"verifica", "interrogazione", "evento"}
 VALID_STATUSES = {"programmata", "completata", "rinviata"}
-VALID_INTERROGATION_MODES = {"period", "specific_days"}
+VALID_INTERROGATION_MODES = {"specific_days"}
 VALID_EVENT_SUBJECTS = {
     "uscita didattica": "Uscita didattica",
     "assemblea": "Assemblea",
@@ -1685,42 +1685,34 @@ def validate_event_payload(payload: dict) -> tuple[dict[str, str], dict[str, str
     interrogated_students = ""
 
     if event_type == "interrogazione":
-        interrogation_mode = str(payload.get("interrogation_mode", "period")).strip().lower()
-        if interrogation_mode not in VALID_INTERROGATION_MODES:
-            errors["interrogation_mode"] = "Scegli periodo o giorni specifici."
+        interrogation_mode = str(payload.get("interrogation_mode", "specific_days")).strip().lower()
+        if interrogation_mode != "specific_days":
+            # Legacy "period" payloads are converted to explicit days.
+            interrogation_mode = "specific_days"
         raw_schedule = str(payload.get("interrogation_schedule", "")).strip()
         legacy_students = normalize_multiline_text(str(payload.get("interrogated_students", "")))
 
-        if interrogation_mode == "specific_days":
-            parsed_dates = parse_iso_date_lines(str(payload.get("interrogation_dates", "")))
-            if not parsed_dates:
-                errors["interrogation_dates"] = "Inserisci almeno un giorno valido."
-            else:
-                scheduled_for = parsed_dates[0]
-                interrogation_end = parsed_dates[-1]
-                interrogation_dates = "\n".join(parsed_dates)
-        else:
+        parsed_dates = parse_iso_date_lines(str(payload.get("interrogation_dates", "")))
+        if not parsed_dates:
+            # Backward compatibility: expand old period payloads into day lists.
             try:
                 start_date = date.fromisoformat(scheduled_for)
             except ValueError:
-                errors["scheduled_for"] = "Inserisci una data di inizio valida."
                 start_date = None
-
             interrogation_end = str(payload.get("interrogation_end", "")).strip()
             try:
-                end_date = date.fromisoformat(interrogation_end)
+                end_date = date.fromisoformat(interrogation_end) if interrogation_end else None
             except ValueError:
-                errors["interrogation_end"] = "Inserisci una data finale valida."
                 end_date = None
+            if start_date is not None and end_date is not None and end_date >= start_date:
+                parsed_dates = build_date_range(scheduled_for, interrogation_end)
 
-            if start_date is not None and end_date is not None and end_date < start_date:
-                errors["interrogation_end"] = "La data finale deve essere uguale o successiva a quella iniziale."
-
-            parsed_dates = (
-                build_date_range(scheduled_for, interrogation_end)
-                if "scheduled_for" not in errors and "interrogation_end" not in errors
-                else []
-            )
+        if not parsed_dates:
+            errors["interrogation_dates"] = "Seleziona almeno un giorno valido."
+        else:
+            scheduled_for = parsed_dates[0]
+            interrogation_end = parsed_dates[-1]
+            interrogation_dates = "\n".join(parsed_dates)
 
         if parsed_dates:
             (

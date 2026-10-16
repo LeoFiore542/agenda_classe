@@ -72,8 +72,10 @@ const elements = {
     scheduledForField: document.querySelector("#scheduled-for-field"),
     scheduledForLabel: document.querySelector("#scheduled-for-label"),
     interrogationFields: document.querySelector("#interrogation-fields"),
-    interrogationEndField: document.querySelector("#interrogation-end-field"),
     interrogationDatesField: document.querySelector("#interrogation-dates-field"),
+    interrogationDayPicker: document.querySelector("#interrogation-day-picker"),
+    addInterrogationDayButton: document.querySelector("#add-interrogation-day"),
+    interrogationDaysList: document.querySelector("#interrogation-days-list"),
     interrogationScheduleBuilder: document.querySelector("#interrogation-schedule-builder"),
     notesField: document.querySelector("#notes-field"),
     notesLabel: document.querySelector("#notes-label"),
@@ -103,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
     state.canEditEvents = state.permissions.includes("edit_events");
     state.canDeleteEvents = state.permissions.includes("delete_events");
     elements.form.event_type.value = "verifica";
-    elements.form.interrogation_mode.value = "period";
+    elements.form.interrogation_mode.value = "specific_days";
     elements.form.scheduled_for.value = state.selectedDate;
     updateSelectedDateLabel();
     bindEvents();
@@ -150,9 +152,13 @@ function bindEvents() {
     elements.form.event_type.addEventListener("change", () => updateInterrogationFields());
     elements.eventSubjectSelect.addEventListener("change", () => syncSubjectField());
     elements.eventSubjectSelect.addEventListener("change", () => updateInterrogationFields());
-    elements.form.interrogation_mode.addEventListener("change", () => updateInterrogationFields());
-    elements.form.interrogation_end.addEventListener("change", () => renderInterrogationScheduleBuilder());
-    elements.form.interrogation_dates.addEventListener("input", () => renderInterrogationScheduleBuilder());
+    elements.addInterrogationDayButton.addEventListener("click", () => addInterrogationDayFromPicker());
+    elements.interrogationDayPicker.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            addInterrogationDayFromPicker();
+        }
+    });
     elements.previousMonthButton.addEventListener("click", () => changeMonth(-1));
     elements.nextMonthButton.addEventListener("click", () => changeMonth(1));
     document.addEventListener("keydown", (event) => {
@@ -817,13 +823,15 @@ function startEditing(event) {
 
     state.editingEventId = event.id;
     elements.form.event_type.value = event.event_type;
-    elements.form.interrogation_mode.value = event.interrogation_mode || "period";
+    elements.form.interrogation_mode.value = "specific_days";
     state.interrogationScheduleDraft = parseInterrogationSchedule(event.interrogation_schedule);
     elements.subjectInput.value = event.subject;
     elements.eventSubjectSelect.value = normalizeEventSubjectOption(event.subject);
     elements.form.scheduled_for.value = event.scheduled_for;
-    elements.form.interrogation_end.value = event.interrogation_end || "";
-    elements.form.interrogation_dates.value = event.interrogation_dates || "";
+    const interrogationDates = event.event_type === "interrogazione"
+        ? getOccurrenceDates(event)
+        : [];
+    setInterrogationDates(interrogationDates);
     elements.form.notes.value = event.notes || "";
     elements.formTitle.textContent = "Modifica impegno";
     elements.formSubtitle.textContent = `Stai modificando ${formatEventTypeLabel(event.event_type).toLowerCase()} di ${event.subject}.`;
@@ -921,11 +929,13 @@ function resetForm(options = {}) {
     state.interrogationScheduleDraft = {};
     elements.form.reset();
     elements.form.event_type.value = "verifica";
-    elements.form.interrogation_mode.value = "period";
+    elements.form.interrogation_mode.value = "specific_days";
     elements.subjectInput.value = "";
     elements.eventSubjectSelect.value = "";
-    elements.form.interrogation_end.value = "";
-    elements.form.interrogation_dates.value = "";
+    setInterrogationDates([]);
+    if (elements.interrogationDayPicker) {
+        elements.interrogationDayPicker.value = "";
+    }
     elements.form.notes.value = "";
     elements.formTitle.textContent = "Aggiungi impegno";
     elements.formSubtitle.textContent = "Inserisci verifica, interrogazione o evento con data e argomenti.";
@@ -1145,16 +1155,14 @@ function updateInterrogationFields() {
     const isGenericEvent = elements.form.event_type.value === "evento";
     const selectedEventCategory = elements.eventSubjectSelect.value;
     const eventNeedsNotes = isGenericEvent && ["Uscita didattica", "Compleanni", "Altro"].includes(selectedEventCategory);
-    const isSpecificDays = elements.form.interrogation_mode.value === "specific_days";
 
+    elements.form.interrogation_mode.value = "specific_days";
     elements.interrogationFields.hidden = !isInterrogation;
     elements.subjectTextField.hidden = isGenericEvent;
     elements.eventSubjectField.hidden = !isGenericEvent;
     elements.notesField.hidden = isGenericEvent && !eventNeedsNotes;
-    elements.interrogationEndField.hidden = !isInterrogation || isSpecificDays;
-    elements.interrogationDatesField.hidden = !isInterrogation || !isSpecificDays;
-    elements.scheduledForField.hidden = isInterrogation && isSpecificDays;
-    elements.scheduledForLabel.textContent = isInterrogation ? "Dal" : "Data";
+    elements.scheduledForField.hidden = isInterrogation;
+    elements.scheduledForLabel.textContent = "Data";
     elements.notesLabel.textContent = isInterrogation
         ? "Argomenti / pagine"
         : selectedEventCategory === "Uscita didattica"
@@ -1178,13 +1186,23 @@ function updateInterrogationFields() {
         elements.notesInput.value = "";
     }
 
-    elements.form.scheduled_for.required = !isInterrogation || !isSpecificDays;
-    elements.form.interrogation_end.required = isInterrogation && !isSpecificDays;
-    elements.form.interrogation_dates.required = isInterrogation && isSpecificDays;
+    elements.form.scheduled_for.required = !isInterrogation;
     if (!isInterrogation) {
         state.interrogationScheduleDraft = {};
+    } else if (
+        getInterrogationTargetDatesFromForm().length === 0
+        && isSchoolDay(state.selectedDate)
+        && !state.editingEventId
+    ) {
+        setInterrogationDates([state.selectedDate]);
+        if (elements.interrogationDayPicker) {
+            elements.interrogationDayPicker.value = "";
+        }
+        syncSubjectField();
+        return;
     }
     syncSubjectField();
+    renderInterrogationDaysList();
     renderInterrogationScheduleBuilder();
 }
 
@@ -1345,38 +1363,77 @@ function syncInterrogationScheduleField(targetDates = getInterrogationTargetDate
 }
 
 function getInterrogationTargetDatesFromForm() {
-    const mode = elements.form.interrogation_mode.value;
-    if (mode === "specific_days") {
-        return parseMultilineList(elements.form.interrogation_dates.value)
-            .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
-            .filter((value) => {
-                const weekday = new Date(`${value}T00:00:00`).getDay();
-                return weekday !== 0 && weekday !== 6;
-            })
-            .sort();
+    return parseMultilineList(elements.form.interrogation_dates.value)
+        .filter((value) => isSchoolDay(value))
+        .sort();
+}
+
+function isSchoolDay(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false;
+    }
+    const weekday = new Date(`${value}T00:00:00`).getDay();
+    return weekday !== 0 && weekday !== 6;
+}
+
+function setInterrogationDates(dates) {
+    const uniqueDates = [...new Set(dates.filter((value) => isSchoolDay(value)))].sort();
+    elements.form.interrogation_dates.value = uniqueDates.join("\n");
+    renderInterrogationDaysList();
+    renderInterrogationScheduleBuilder();
+}
+
+function renderInterrogationDaysList() {
+    if (!elements.interrogationDaysList) {
+        return;
     }
 
-    const startValue = elements.form.scheduled_for.value;
-    const endValue = elements.form.interrogation_end.value;
-    if (!startValue || !endValue) {
-        return [];
+    elements.interrogationDaysList.innerHTML = "";
+    getInterrogationTargetDatesFromForm().forEach((dateValue) => {
+        const chip = document.createElement("span");
+        chip.className = "interrogation-day-chip";
+
+        const label = document.createElement("span");
+        label.textContent = formatDate(dateValue);
+        chip.appendChild(label);
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.setAttribute("aria-label", `Rimuovi ${formatDate(dateValue)}`);
+        removeButton.textContent = "×";
+        removeButton.addEventListener("click", () => removeInterrogationDay(dateValue));
+        chip.appendChild(removeButton);
+
+        elements.interrogationDaysList.appendChild(chip);
+    });
+}
+
+function addInterrogationDayFromPicker() {
+    const dateValue = elements.interrogationDayPicker?.value;
+    if (!dateValue) {
+        elements.feedback.textContent = "Scegli un giorno da aggiungere.";
+        return;
+    }
+    if (!isSchoolDay(dateValue)) {
+        elements.feedback.textContent = "Puoi aggiungere solo giorni feriali.";
+        return;
     }
 
-    const startDate = new Date(`${startValue}T00:00:00`);
-    const endDate = new Date(`${endValue}T00:00:00`);
-    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < startDate) {
-        return [];
+    const currentDates = getInterrogationTargetDatesFromForm();
+    if (currentDates.includes(dateValue)) {
+        elements.feedback.textContent = "Questo giorno e gia stato aggiunto.";
+        return;
     }
 
-    const dates = [];
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-        if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) {
-            dates.push(getDateString(currentDate));
-        }
-        currentDate.setDate(currentDate.getDate() + 1);
-    }
-    return dates;
+    elements.feedback.textContent = "";
+    setInterrogationDates([...currentDates, dateValue]);
+    elements.interrogationDayPicker.value = "";
+}
+
+function removeInterrogationDay(dateValue) {
+    setInterrogationDates(
+        getInterrogationTargetDatesFromForm().filter((value) => value !== dateValue)
+    );
 }
 
 function parseInterrogationSchedule(value) {

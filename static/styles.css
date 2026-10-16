@@ -966,6 +966,70 @@ textarea {
     background: rgba(31, 78, 95, 0.04);
 }
 
+.interrogation-dates-picker {
+    display: grid;
+    gap: 8px;
+}
+
+.interrogation-dates-picker .field-label {
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.day-picker-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.interrogation-days-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 2.2rem;
+}
+
+.interrogation-days-list:empty::before {
+    content: "Nessun giorno selezionato";
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.interrogation-day-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(31, 78, 95, 0.18);
+    background: rgba(255, 255, 255, 0.9);
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.interrogation-day-chip button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(31, 78, 95, 0.1);
+    color: var(--text);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.interrogation-day-chip button:hover {
+    background: rgba(213, 111, 62, 0.2);
+}
+
 .simple-form label {
     display: grid;
     gap: 8px;
