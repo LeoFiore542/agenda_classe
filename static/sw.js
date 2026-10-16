@@ -1,4 +1,4 @@
-const CACHE_NAME = "agenda-shell-v1";
+const CACHE_NAME = "agenda-shell-v2";
 const SHELL_ASSETS = [
     "/login",
     "/manifest.webmanifest",
@@ -64,7 +64,21 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // Cache-first for static shell assets.
+    // Network-first for JS so deploys are not stuck on a stale shell script.
+    if (url.pathname.startsWith("/static/") && url.pathname.endsWith(".js")) {
+        event.respondWith(
+            fetch(request)
+                .then((response) => {
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+                    return response;
+                })
+                .catch(() => caches.match(request))
+        );
+        return;
+    }
+
+    // Cache-first for other static shell assets.
     event.respondWith(
         caches.match(request).then((cached) => {
             if (cached) {

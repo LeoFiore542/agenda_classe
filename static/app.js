@@ -152,13 +152,17 @@ function bindEvents() {
     elements.form.event_type.addEventListener("change", () => updateInterrogationFields());
     elements.eventSubjectSelect.addEventListener("change", () => syncSubjectField());
     elements.eventSubjectSelect.addEventListener("change", () => updateInterrogationFields());
-    elements.addInterrogationDayButton.addEventListener("click", () => addInterrogationDayFromPicker());
-    elements.interrogationDayPicker.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            addInterrogationDayFromPicker();
-        }
-    });
+    if (elements.addInterrogationDayButton) {
+        elements.addInterrogationDayButton.addEventListener("click", () => addInterrogationDayFromPicker());
+    }
+    if (elements.interrogationDayPicker) {
+        elements.interrogationDayPicker.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                addInterrogationDayFromPicker();
+            }
+        });
+    }
     elements.previousMonthButton.addEventListener("click", () => changeMonth(-1));
     elements.nextMonthButton.addEventListener("click", () => changeMonth(1));
     document.addEventListener("keydown", (event) => {
