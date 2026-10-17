@@ -54,7 +54,23 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS activity_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    username TEXT NOT NULL DEFAULT '',
+    full_name TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    ip_address TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_scheduled_for ON events (scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs (created_at);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs (action);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_username ON activity_logs (username);
 CREATE INDEX IF NOT EXISTS idx_events_subject ON events (subject);
 CREATE INDEX IF NOT EXISTS idx_events_status ON events (status);
 CREATE INDEX IF NOT EXISTS idx_events_class_group ON events (class_group);

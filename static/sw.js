@@ -1,4 +1,4 @@
-const CACHE_NAME = "agenda-shell-v3";
+const CACHE_NAME = "agenda-shell-v4";
 const SHELL_ASSETS = [
     "/login",
     "/manifest.webmanifest",

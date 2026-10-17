@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log · aGenda</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
+    {% include "partials/pwa_head.html" %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="session-bar panel">
+            <div class="session-user">
+                <span class="session-user-label">Accesso attivo</span>
+                <strong>{{ current_user.full_name }}</strong>
+                <span class="session-user-meta">@{{ current_user.username }}</span>
+            </div>
+            <div class="session-actions">
+                <form method="post" action="{{ url_for('logout') }}">
+                    <button class="ghost-button" type="submit">Esci</button>
+                </form>
+            </div>
+        </div>
+
+        {% include "partials/main_nav.html" %}
+
+        <header class="hero">
+            <div>
+                <p class="eyebrow">Solo owner</p>
+                <h1>Log</h1>
+                <p class="hero-copy">
+                    Accessi, tentativi falliti e utilizzo recente dell'agenda.
+                </p>
+            </div>
+        </header>
+
+        <section class="panel log-stats-panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Ultimi 7 giorni</p>
+                    <h2>Statistiche di utilizzo</h2>
+                </div>
+            </div>
+            <div class="log-stats-grid">
+                <article class="log-stat-card">
+                    <span class="log-stat-value">{{ stats.logins_today }}</span>
+                    <span class="log-stat-label">Accessi oggi</span>
+                </article>
+                <article class="log-stat-card">
+                    <span class="log-stat-value">{{ stats.logins_week }}</span>
+                    <span class="log-stat-label">Accessi settimana</span>
+                </article>
+                <article class="log-stat-card">
+                    <span class="log-stat-value">{{ stats.unique_users_week }}</span>
+                    <span class="log-stat-label">Persone attive</span>
+                </article>
+                <article class="log-stat-card">
+                    <span class="log-stat-value">{{ stats.failed_logins_week }}</span>
+                    <span class="log-stat-label">Accessi falliti</span>
+                </article>
+                <article class="log-stat-card">
+                    <span class="log-stat-value">{{ stats.page_views_week }}</span>
+                    <span class="log-stat-label">Visite sezioni</span>
+                </article>
+                <article class="log-stat-card">
+                    <span class="log-stat-value">{{ stats.creates_week }}</span>
+                    <span class="log-stat-label">Nuovi impegni</span>
+                </article>
+                <article class="log-stat-card">
+                    <span class="log-stat-value">{{ stats.updates_week }}</span>
+                    <span class="log-stat-label">Modifiche</span>
+                </article>
+                <article class="log-stat-card">
+                    <span class="log-stat-value">{{ stats.deletes_week }}</span>
+                    <span class="log-stat-label">Eliminazioni</span>
+                </article>
+            </div>
+            <p class="field-help log-stats-note">Azioni totali negli ultimi 30 giorni: {{ stats.actions_month }}</p>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Classifica</p>
+                    <h2>Utenti piu attivi (7 giorni)</h2>
+                </div>
+            </div>
+            {% if top_users %}
+            <div class="log-top-users">
+                {% for user in top_users %}
+                <div class="log-top-user-row">
+                    <div>
+                        <strong>{{ user.full_name }}</strong>
+                        <span class="session-user-meta">@{{ user.username }}</span>
+                    </div>
+                    <div class="log-top-user-meta">
+                        <span>{{ user.logins }} accessi</span>
+                        <span>{{ user.actions }} azioni</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="empty-state">Ancora nessun utilizzo registrato in settimana.</p>
+            {% endif %}
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Accessi</p>
+                    <h2>Chi e entrato</h2>
+                </div>
+            </div>
+            {% if recent_logins %}
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Quando</th>
+                            <th>Persona</th>
+                            <th>Evento</th>
+                            <th>IP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in recent_logins %}
+                        <tr class="log-row-{{ item.action }}">
+                            <td>{{ item.created_at_label }}</td>
+                            <td>
+                                <strong>{{ item.full_name or item.username or "—" }}</strong>
+                                {% if item.username %}<span class="session-user-meta">@{{ item.username }}</span>{% endif %}
+                            </td>
+                            <td>
+                                <span class="log-pill">{{ item.action_label }}</span>
+                                {% if item.detail %}<span class="log-detail">{{ item.detail }}</span>{% endif %}
+                            </td>
+                            <td>{{ item.ip_address or "—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-state">Nessun accesso registrato finora.</p>
+            {% endif %}
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Attivita</p>
+                    <h2>Cronologia recente</h2>
+                </div>
+            </div>
+            {% if recent_activity %}
+            <div class="log-table-wrap">
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Quando</th>
+                            <th>Persona</th>
+                            <th>Azione</th>
+                            <th>Dettaglio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in recent_activity %}
+                        <tr class="log-row-{{ item.action }}">
+                            <td>{{ item.created_at_label }}</td>
+                            <td>
+                                <strong>{{ item.full_name or item.username or "—" }}</strong>
+                            </td>
+                            <td><span class="log-pill">{{ item.action_label }}</span></td>
+                            <td>{{ item.detail or item.path or "—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty-state">La cronologia si riempira dopo i prossimi accessi e modifiche.</p>
+            {% endif %}
+        </section>
+    </div>
+    <script src="{{ url_for('static', filename='loading-overlay.js') }}"></script>
+    <script src="{{ url_for('static', filename='pwa.js') }}"></script>
+</body>
+</html>

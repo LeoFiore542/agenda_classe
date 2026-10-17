@@ -176,6 +176,123 @@ textarea {
     gap: 8px;
 }
 
+.main-tabs.has-owner-tab {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.log-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.log-stat-card {
+    display: grid;
+    gap: 6px;
+    padding: 16px;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.log-stat-value {
+    font-family: "Space Grotesk", sans-serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--primary-strong);
+    line-height: 1;
+}
+
+.log-stat-label {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--muted);
+}
+
+.log-stats-note {
+    margin: 14px 0 0;
+}
+
+.log-top-users {
+    display: grid;
+    gap: 10px;
+}
+
+.log-top-user-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.log-top-user-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--muted);
+}
+
+.log-table-wrap {
+    overflow-x: auto;
+}
+
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+}
+
+.log-table th,
+.log-table td {
+    padding: 12px 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(31, 78, 95, 0.1);
+    vertical-align: top;
+}
+
+.log-table th {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+}
+
+.log-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(31, 78, 95, 0.1);
+    color: var(--primary-strong);
+    font-size: 0.78rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.log-row-login_failed .log-pill {
+    background: rgba(180, 52, 52, 0.12);
+    color: #8f1f1f;
+}
+
+.log-row-login .log-pill {
+    background: rgba(31, 120, 80, 0.12);
+    color: #1d6b45;
+}
+
+.log-detail {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
 .main-tab {
     display: grid;
     place-items: center;
@@ -1514,9 +1631,11 @@ textarea {
         font-size: clamp(2.1rem, 10vw, 3rem);
     }
 
-    .main-tabs {
+    .main-tabs,
+    .main-tabs.has-owner-tab {
         gap: 6px;
         padding: 6px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .main-tab {
@@ -1524,6 +1643,14 @@ textarea {
         padding: 10px 8px;
         font-size: 0.92rem;
         border-radius: 12px;
+    }
+
+    .log-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .log-top-user-row {
+        display: grid;
     }
 
     .month-toolbar,

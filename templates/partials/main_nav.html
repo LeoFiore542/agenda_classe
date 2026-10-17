@@ -1,4 +1,4 @@
-<nav class="main-tabs panel" aria-label="Sezioni principali">
+<nav class="main-tabs panel{% if is_owner %} has-owner-tab{% endif %}" aria-label="Sezioni principali">
     <a
         class="main-tab{% if active_tab == 'personale' %} is-active{% endif %}"
         href="{{ url_for('account') }}"
@@ -14,4 +14,11 @@
         href="{{ url_for('orario') }}"
         {% if active_tab == 'orario' %}aria-current="page"{% endif %}
     >Orario</a>
+    {% if is_owner %}
+    <a
+        class="main-tab{% if active_tab == 'log' %} is-active{% endif %}"
+        href="{{ url_for('activity_log_page') }}"
+        {% if active_tab == 'log' %}aria-current="page"{% endif %}
+    >Log</a>
+    {% endif %}
 </nav>

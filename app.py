@@ -9,7 +9,7 @@ import subprocess
 import threading
 import time
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -22,6 +22,7 @@ except ImportError:
 
 from flask import (
     Flask,
+    abort,
     current_app,
     flash,
     g,
@@ -233,8 +234,11 @@ def create_app(test_config: dict | None = None) -> Flask:
         g.current_user = fetch_user_by_id(user_id) if user_id is not None else None
 
     @app.context_processor
-    def inject_current_user() -> dict[str, dict | None]:
-        return {"current_user": g.get("current_user")}
+    def inject_current_user() -> dict[str, object]:
+        return {
+            "current_user": g.get("current_user"),
+            "is_owner": is_current_user_owner(),
+        }
 
     @app.teardown_appcontext
     def close_db(_: object | None) -> None:
@@ -266,9 +270,21 @@ def create_app(test_config: dict | None = None) -> Flask:
 
             if user is None or not check_password_hash(user["password_hash"], password):
                 error_message = "Username o password non validi."
+                record_activity(
+                    action="login_failed",
+                    username=username,
+                    detail="Credenziali non valide",
+                    path="/login",
+                )
             else:
                 session.clear()
                 session["user_id"] = user["id"]
+                record_activity(
+                    action="login",
+                    user=user,
+                    detail="Accesso riuscito",
+                    path="/login",
+                )
                 if user.get("must_change_password"):
                     flash("Primo accesso rilevato: aggiorna subito la tua password personale.", "error")
                     return redirect(url_for("account"))
@@ -279,6 +295,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.post("/logout")
     @login_required
     def logout():
+        record_activity(action="logout", user=g.get("current_user"), detail="Uscita", path="/logout")
         session.clear()
         return redirect(url_for("login"))
 
@@ -336,6 +353,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     @app.get("/account")
     @login_required
     def account() -> str:
+        if not g.current_user.get("must_change_password"):
+            record_page_view_once(detail="Area personale", path="/account")
         return render_template(
             "account.html",
             personal_schedule=build_personal_schedule(
@@ -350,6 +369,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     @login_required
     @password_change_not_required
     def orario() -> str:
+        record_page_view_once(detail="Orario", path="/orario")
         return render_template(
             "orario.html",
             class_group=str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP)),
@@ -358,10 +378,36 @@ def create_app(test_config: dict | None = None) -> Flask:
             active_tab="orario",
         )
 
+    @app.get("/log")
+    @login_required
+    @password_change_not_required
+    def activity_log_page() -> str:
+        if not is_current_user_owner():
+            abort(403)
+        payload = build_activity_dashboard()
+        return render_template(
+            "log.html",
+            is_owner=True,
+            active_tab="log",
+            stats=payload["stats"],
+            recent_logins=payload["recent_logins"],
+            recent_activity=payload["recent_activity"],
+            top_users=payload["top_users"],
+        )
+
+    @app.get("/api/logs")
+    @login_required
+    @password_change_not_required
+    def activity_logs_api():
+        if not is_current_user_owner():
+            return jsonify({"error": "Solo l'owner puo leggere i log."}), 403
+        return jsonify(build_activity_dashboard())
+
     @app.route("/")
     @login_required
     @password_change_not_required
     def index() -> str:
+        record_page_view_once(detail="Agenda", path="/")
         return render_template(
             "index.html",
             today=date.today().isoformat(),
@@ -459,6 +505,12 @@ def create_app(test_config: dict | None = None) -> Flask:
         if event is None:
             return jsonify({"error": "Impossibile recuperare l'evento creato."}), 500
 
+        record_activity(
+            action="event_create",
+            user=g.current_user,
+            detail=f"{cleaned['event_type']} · {cleaned['subject']} · {cleaned['scheduled_for']}",
+            path="/api/events",
+        )
         return jsonify(event), 201
 
     @app.patch("/api/events/<int:event_id>")
@@ -505,6 +557,12 @@ def create_app(test_config: dict | None = None) -> Flask:
             ),
         )
         database.commit()
+        record_activity(
+            action="event_update",
+            user=g.current_user,
+            detail=f"#{event_id} · {cleaned['event_type']} · {cleaned['subject']}",
+            path=f"/api/events/{event_id}",
+        )
         return jsonify(fetch_event_by_id(event_id, str(g.current_user.get("class_group", DEFAULT_CLASS_GROUP))))
 
     @app.delete("/api/events/<int:event_id>")
@@ -520,6 +578,12 @@ def create_app(test_config: dict | None = None) -> Flask:
         database.commit()
         if cursor.rowcount == 0:
             return jsonify({"error": "Evento non trovato."}), 404
+        record_activity(
+            action="event_delete",
+            user=g.current_user,
+            detail=f"Eliminato impegno #{event_id}",
+            path=f"/api/events/{event_id}",
+        )
         return ("", 204)
 
     @app.get("/api/countdown")
@@ -758,6 +822,7 @@ def init_db() -> None:
     database = get_db()
     if schema_already_ready(database):
         # Keep roster/owner in sync without re-running the full schema every cold start.
+        ensure_activity_logs_table(database)
         seed_user_accounts(database)
         ensure_owner_account(database)
         database.commit()
@@ -770,6 +835,7 @@ def init_db() -> None:
     migrate_events_table(database)
     ensure_events_columns(database)
     ensure_users_columns(database)
+    ensure_activity_logs_table(database)
     seed_user_accounts(database)
     seed_roles_and_permissions(database)
     ensure_owner_account(database)
@@ -1223,6 +1289,263 @@ def is_current_user_owner() -> bool:
     return bool(current_user.get("is_owner")) or str(current_user.get("username", "")).strip().lower() in {
         OWNER_USERNAME,
         LEGACY_OWNER_USERNAME,
+    }
+
+
+def ensure_activity_logs_table(database: DatabaseAdapter) -> None:
+    if database.backend == "postgres":
+        database.execute(
+            """
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT,
+                username TEXT NOT NULL DEFAULT '',
+                full_name TEXT NOT NULL DEFAULT '',
+                action TEXT NOT NULL,
+                detail TEXT NOT NULL DEFAULT '',
+                path TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    else:
+        database.execute(
+            """
+            CREATE TABLE IF NOT EXISTS activity_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                username TEXT NOT NULL DEFAULT '',
+                full_name TEXT NOT NULL DEFAULT '',
+                action TEXT NOT NULL,
+                detail TEXT NOT NULL DEFAULT '',
+                path TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs (created_at)"
+    )
+    database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs (action)"
+    )
+    database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_activity_logs_username ON activity_logs (username)"
+    )
+
+
+def request_client_ip() -> str:
+    forwarded = str(request.headers.get("X-Forwarded-For", "") or "").strip()
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:80]
+    return str(request.remote_addr or "")[:80]
+
+
+def request_user_agent() -> str:
+    return str(request.headers.get("User-Agent", "") or "")[:300]
+
+
+def record_activity(
+    *,
+    action: str,
+    user: dict | None = None,
+    username: str = "",
+    detail: str = "",
+    path: str = "",
+) -> None:
+    try:
+        database = get_db()
+        ensure_activity_logs_table(database)
+        resolved_username = ""
+        resolved_full_name = ""
+        user_id = None
+        if user:
+            user_id = user.get("id")
+            resolved_username = str(user.get("username", "") or "")
+            resolved_full_name = str(user.get("full_name", "") or "")
+        if username:
+            resolved_username = username
+        database.execute(
+            """
+            INSERT INTO activity_logs (
+                user_id, username, full_name, action, detail, path, ip_address, user_agent
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                resolved_username,
+                resolved_full_name,
+                action,
+                detail[:300],
+                (path or request.path or "")[:200],
+                request_client_ip(),
+                request_user_agent(),
+            ),
+        )
+        database.commit()
+    except Exception:
+        # Logging must never break login or API flows.
+        try:
+            get_db().connection.rollback()
+        except Exception:
+            pass
+
+
+def record_page_view_once(*, detail: str, path: str) -> None:
+    seen = session.get("logged_page_views")
+    if not isinstance(seen, list):
+        seen = []
+    if path in seen:
+        return
+    seen = [*seen, path][-12:]
+    session["logged_page_views"] = seen
+    record_activity(action="page_view", user=g.get("current_user"), detail=detail, path=path)
+
+
+ACTIVITY_ACTION_LABELS = {
+    "login": "Accesso",
+    "login_failed": "Accesso fallito",
+    "logout": "Uscita",
+    "page_view": "Visita sezione",
+    "event_create": "Nuovo impegno",
+    "event_update": "Modifica impegno",
+    "event_delete": "Eliminazione impegno",
+}
+
+
+def parse_activity_timestamp(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None) if value.tzinfo else value
+    text = str(value).strip().replace("T", " ").replace("Z", "")
+    if "+" in text[10:]:
+        text = text.split("+", 1)[0].strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text[:26], fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def format_activity_timestamp(value: Any) -> str:
+    parsed = parse_activity_timestamp(value)
+    if parsed is None:
+        return str(value or "")
+    return parsed.strftime("%d/%m/%Y %H:%M")
+
+
+def serialize_activity_row(row: Any) -> dict[str, object]:
+    action = str(row["action"] or "")
+    return {
+        "id": row["id"],
+        "user_id": row["user_id"],
+        "username": row["username"] or "",
+        "full_name": row["full_name"] or "",
+        "action": action,
+        "action_label": ACTIVITY_ACTION_LABELS.get(action, action),
+        "detail": row["detail"] or "",
+        "path": row["path"] or "",
+        "ip_address": row["ip_address"] or "",
+        "user_agent": row["user_agent"] or "",
+        "created_at": str(row["created_at"] or ""),
+        "created_at_label": format_activity_timestamp(row["created_at"]),
+    }
+
+
+def build_activity_dashboard() -> dict[str, object]:
+    ensure_activity_logs_table(get_db())
+    rows = get_db().execute(
+        """
+        SELECT id, user_id, username, full_name, action, detail, path, ip_address, user_agent, created_at
+        FROM activity_logs
+        ORDER BY id DESC
+        LIMIT 500
+        """
+    ).fetchall()
+    serialized = [serialize_activity_row(row) for row in rows]
+    now = datetime.utcnow()
+    start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_week = start_today - timedelta(days=6)
+    start_month = start_today - timedelta(days=29)
+
+    def in_window(item: dict[str, object], start: datetime) -> bool:
+        parsed = parse_activity_timestamp(item.get("created_at"))
+        return parsed is not None and parsed >= start
+
+    logins_today = [
+        item for item in serialized if item["action"] == "login" and in_window(item, start_today)
+    ]
+    logins_week = [
+        item for item in serialized if item["action"] == "login" and in_window(item, start_week)
+    ]
+    activity_week = [item for item in serialized if in_window(item, start_week)]
+    activity_month = [item for item in serialized if in_window(item, start_month)]
+
+    unique_users_week = {
+        str(item["username"])
+        for item in logins_week
+        if item.get("username")
+    }
+    failed_week = sum(1 for item in activity_week if item["action"] == "login_failed")
+    creates_week = sum(1 for item in activity_week if item["action"] == "event_create")
+    updates_week = sum(1 for item in activity_week if item["action"] == "event_update")
+    deletes_week = sum(1 for item in activity_week if item["action"] == "event_delete")
+    page_views_week = sum(1 for item in activity_week if item["action"] == "page_view")
+
+    user_counts: dict[str, dict[str, object]] = {}
+    for item in activity_week:
+        username = str(item.get("username") or "").strip()
+        if not username or item["action"] == "login_failed":
+            continue
+        bucket = user_counts.setdefault(
+            username,
+            {
+                "username": username,
+                "full_name": item.get("full_name") or username,
+                "actions": 0,
+                "logins": 0,
+            },
+        )
+        bucket["actions"] = int(bucket["actions"]) + 1
+        if item["action"] == "login":
+            bucket["logins"] = int(bucket["logins"]) + 1
+        if item.get("full_name"):
+            bucket["full_name"] = item["full_name"]
+
+    top_users = sorted(
+        user_counts.values(),
+        key=lambda entry: (int(entry["actions"]), int(entry["logins"])),
+        reverse=True,
+    )[:8]
+
+    recent_logins = [
+        item
+        for item in serialized
+        if item["action"] in {"login", "login_failed", "logout"}
+    ][:40]
+    recent_activity = serialized[:80]
+
+    return {
+        "stats": {
+            "logins_today": len(logins_today),
+            "logins_week": len(logins_week),
+            "unique_users_week": len(unique_users_week),
+            "failed_logins_week": failed_week,
+            "page_views_week": page_views_week,
+            "creates_week": creates_week,
+            "updates_week": updates_week,
+            "deletes_week": deletes_week,
+            "actions_month": len(activity_month),
+        },
+        "recent_logins": recent_logins,
+        "recent_activity": recent_activity,
+        "top_users": top_users,
     }
 
 
