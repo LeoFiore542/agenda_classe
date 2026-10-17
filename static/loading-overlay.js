@@ -1,9 +1,11 @@
 (() => {
     const OVERLAY_ID = "global-loading-overlay";
     const READ_DELAY_MS = 280;
+    const STUCK_GUARD_MS = 20000;
     let pendingCount = 0;
     let hideTimeoutId = null;
     let showTimeoutId = null;
+    let stuckGuardTimeoutId = null;
 
     function ensureOverlay() {
         let overlay = document.getElementById(OVERLAY_ID);
@@ -27,11 +29,29 @@
         return overlay;
     }
 
+    function clearStuckGuard() {
+        if (stuckGuardTimeoutId !== null) {
+            window.clearTimeout(stuckGuardTimeoutId);
+            stuckGuardTimeoutId = null;
+        }
+    }
+
+    function scheduleStuckGuard() {
+        clearStuckGuard();
+        stuckGuardTimeoutId = window.setTimeout(() => {
+            stuckGuardTimeoutId = null;
+            if (pendingCount > 0) {
+                forceHideLoading();
+            }
+        }, STUCK_GUARD_MS);
+    }
+
     function revealOverlay() {
         const overlay = ensureOverlay();
         overlay.removeAttribute("hidden");
         overlay.setAttribute("aria-hidden", "false");
         document.body.classList.add("loading-active");
+        scheduleStuckGuard();
     }
 
     function beginLoading(immediate) {
@@ -51,6 +71,7 @@
         }
 
         if (showTimeoutId !== null || document.body.classList.contains("loading-active")) {
+            scheduleStuckGuard();
             return;
         }
         showTimeoutId = window.setTimeout(() => {
@@ -61,9 +82,35 @@
         }, READ_DELAY_MS);
     }
 
+    function hideOverlayNow() {
+        clearStuckGuard();
+        if (showTimeoutId !== null) {
+            window.clearTimeout(showTimeoutId);
+            showTimeoutId = null;
+        }
+        if (hideTimeoutId !== null) {
+            window.clearTimeout(hideTimeoutId);
+            hideTimeoutId = null;
+        }
+        const overlay = document.getElementById(OVERLAY_ID);
+        if (!overlay) {
+            document.body.classList.remove("loading-active");
+            return;
+        }
+        overlay.setAttribute("hidden", "");
+        overlay.setAttribute("aria-hidden", "true");
+        document.body.classList.remove("loading-active");
+    }
+
+    function forceHideLoading() {
+        pendingCount = 0;
+        hideOverlayNow();
+    }
+
     function endLoading() {
         pendingCount = Math.max(0, pendingCount - 1);
         if (pendingCount > 0) {
+            scheduleStuckGuard();
             return;
         }
 
@@ -73,14 +120,10 @@
         }
 
         hideTimeoutId = window.setTimeout(() => {
-            const overlay = document.getElementById(OVERLAY_ID);
-            if (!overlay || pendingCount > 0) {
+            if (pendingCount > 0) {
                 return;
             }
-            overlay.setAttribute("hidden", "");
-            overlay.setAttribute("aria-hidden", "true");
-            document.body.classList.remove("loading-active");
-            hideTimeoutId = null;
+            hideOverlayNow();
         }, 80);
     }
 
@@ -142,20 +185,19 @@
         }
     }
 
-    document.addEventListener(
-        "submit",
-        (event) => {
-            const form = event.target;
-            if (!(form instanceof HTMLFormElement)) {
-                return;
-            }
-            if (event.defaultPrevented) {
-                return;
-            }
-            beginLoading(true);
-        },
-        true
-    );
+    // Bubble phase (not capture): SPA forms call preventDefault first, so we skip
+    // them and let the fetch wrapper own the overlay. Classic full-page submits
+    // still show loading because defaultPrevented stays false.
+    document.addEventListener("submit", (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) {
+            return;
+        }
+        if (event.defaultPrevented) {
+            return;
+        }
+        beginLoading(true);
+    });
 
     document.addEventListener(
         "click",
@@ -176,9 +218,16 @@
         true
     );
 
+    window.addEventListener("pageshow", (event) => {
+        if (event.persisted) {
+            forceHideLoading();
+        }
+    });
+
     window.aGendaLoading = {
         show: () => beginLoading(true),
         hide: endLoading,
+        reset: forceHideLoading,
     };
 
     if (document.readyState === "loading") {
@@ -187,3 +236,4 @@
         ensureOverlay();
     }
 })();
+
