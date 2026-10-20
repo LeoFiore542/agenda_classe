@@ -54,6 +54,7 @@ DEFAULT_PORT = 8000
 OWNER_USERNAME = "fiorini.leonardo"
 LEGACY_OWNER_USERNAME = "leonardo.fiorini"
 OWNER_FULL_NAME = "Fiorini Leonardo"
+DEFAULT_REPRESENTATIVE_USERNAMES = ("dischino.valerio",)
 CREDENTIAL_RESET_MIGRATION_KEY = "credential_reset_2026_04"
 COUNTDOWN_TARGET_DATE_KEY = "school_countdown_target_date"
 USEFUL_LINKS_KEY = "useful_links"
@@ -825,6 +826,7 @@ def init_db() -> None:
         ensure_activity_logs_table(database)
         seed_user_accounts(database)
         ensure_owner_account(database)
+        ensure_representative_accounts(database)
         database.commit()
         return
 
@@ -839,6 +841,7 @@ def init_db() -> None:
     seed_user_accounts(database)
     seed_roles_and_permissions(database)
     ensure_owner_account(database)
+    ensure_representative_accounts(database)
     ensure_default_user_roles(database)
     run_credential_reset_once(database)
     set_app_setting(SCHEMA_VERSION_KEY, CURRENT_SCHEMA_VERSION)
@@ -983,6 +986,14 @@ def ensure_owner_account(database: DatabaseAdapter) -> None:
             WHERE id = ?
             """,
             (OWNER_FULL_NAME, DEFAULT_CLASS_GROUP, owner_row["id"]),
+        )
+
+
+def ensure_representative_accounts(database: DatabaseAdapter) -> None:
+    for username in DEFAULT_REPRESENTATIVE_USERNAMES:
+        database.execute(
+            "UPDATE users SET is_representative = 1 WHERE username = ?",
+            (username,),
         )
 
 
